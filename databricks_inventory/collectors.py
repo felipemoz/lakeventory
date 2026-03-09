@@ -1,0 +1,813 @@
+"""Asset collection functions for Databricks workspace."""
+
+import os
+from typing import List, Tuple
+
+from databricks.sdk import WorkspaceClient
+
+from .models import Finding
+from .utils import safe_iter, safe_list_call
+
+
+def collect_workspace_objects(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect workspace objects (notebooks, directories, files)."""
+    findings = []
+    stack = ["/"]
+    
+    while stack:
+        current = stack.pop()
+        for obj in safe_iter(
+            "workspace.list",
+            safe_list_call("workspace.list", lambda p=current: client.workspace.list(path=p), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            obj_type = getattr(obj, "object_type", None)
+            obj_path = getattr(obj, "path", "") or ""
+            if str(obj_type) == "DIRECTORY":
+                stack.append(obj_path)
+                findings.append(Finding(obj_path, "workspace_dir", "workspace directory"))
+            else:
+                kind = "workspace_notebook" if str(obj_type) == "NOTEBOOK" else "workspace_file"
+                lang = getattr(obj, "language", "unknown")
+                findings.append(Finding(obj_path, kind, f"language: {lang}"))
+    
+    return findings
+
+
+def collect_jobs(
+    client: WorkspaceClient,
+    include_runs: bool,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect jobs and optionally job runs."""
+    findings = []
+    
+    for job in safe_iter(
+        "jobs.list",
+        safe_list_call("jobs.list", lambda: client.jobs.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms
+    ):
+        job_id = getattr(job, "job_id", None)
+        name = getattr(getattr(job, "settings", None), "name", "")
+        findings.append(Finding(f"job:{job_id}", "job", name))
+
+    if include_runs and hasattr(client.jobs, "list_runs"):
+        for run in safe_iter(
+            "jobs.list_runs",
+            safe_list_call("jobs.list_runs", lambda: client.jobs.list_runs(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms
+        ):
+            run_id = getattr(run, "run_id", None)
+            job_id = getattr(run, "job_id", None)
+            state = getattr(getattr(run, "state", None), "life_cycle_state", "")
+            findings.append(Finding(f"job-run:{run_id}", "job_run", f"job_id={job_id} state={state}"))
+    
+    return findings
+
+
+def collect_clusters(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect clusters, policies, init scripts, and instance pools."""
+    findings = []
+    cloud_provider = os.getenv("DATABRICKS_CLOUD_PROVIDER", "").upper()
+    
+    # Clusters
+    for cluster in safe_iter(
+        "clusters.list",
+        safe_list_call("clusters.list", lambda: client.clusters.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms
+    ):
+        cluster_id = getattr(cluster, "cluster_id", None)
+        name = getattr(cluster, "cluster_name", "")
+        findings.append(Finding(f"cluster:{cluster_id}", "cluster", name))
+
+    # Cluster policies
+    for policy in safe_iter(
+        "cluster_policies.list",
+        safe_list_call("cluster_policies.list", lambda: client.cluster_policies.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        policy_id = getattr(policy, "policy_id", None)
+        name = getattr(policy, "name", "")
+        findings.append(Finding(f"cluster-policy:{policy_id}", "cluster_policy", name))
+
+    # Global init scripts
+    if hasattr(client, "global_init_scripts"):
+        for script in safe_iter(
+            "global_init_scripts.list",
+            safe_list_call("global_init_scripts.list", lambda: client.global_init_scripts.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            script_id = getattr(script, "script_id", None)
+            name = getattr(script, "name", "")
+            findings.append(Finding(f"global-init-script:{script_id}", "global_init_script", name))
+
+    # Instance Profiles (AWS only)
+    if cloud_provider == "AWS" and hasattr(client, "instance_profiles"):
+        for prof in safe_iter(
+            "instance_profiles.list",
+            safe_list_call("instance_profiles.list", lambda: client.instance_profiles.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            arn = getattr(prof, "instance_profile_arn", "")
+            findings.append(Finding(f"instance-profile:{arn}", "instance_profile", arn))
+    elif cloud_provider in ["AZURE", "GCP"] and hasattr(client, "instance_profiles"):
+        warnings.append(f"instance_profiles.list skipped: not available on {cloud_provider}")
+
+    # Instance Pools
+    for pool in safe_iter(
+        "instance_pools.list",
+        safe_list_call("instance_pools.list", lambda: client.instance_pools.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms
+    ):
+        pool_id = getattr(pool, "instance_pool_id", None)
+        name = getattr(pool, "instance_pool_name", "")
+        findings.append(Finding(f"instance-pool:{pool_id}", "instance_pool", name))
+    
+    return findings
+
+
+def collect_sql_assets(
+    client: WorkspaceClient,
+    include_query_history: bool,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect SQL warehouses, dashboards, queries, and alerts."""
+    findings = []
+    
+    # SQL Warehouses
+    for wh in safe_iter(
+        "warehouses.list",
+        safe_list_call("warehouses.list", lambda: client.warehouses.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        wh_id = getattr(wh, "id", None)
+        name = getattr(wh, "name", "")
+        serverless = getattr(wh, "enable_serverless_compute", None)
+        notes = f"{name} | serverless={serverless}"
+        findings.append(Finding(f"sql-warehouse:{wh_id}", "sql_warehouse", notes))
+
+    # Pipelines (Delta Live Tables)
+    for pipeline in safe_iter(
+        "pipelines.list",
+        safe_list_call("pipelines.list", lambda: client.pipelines.list_pipelines(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        pipeline_id = getattr(pipeline, "pipeline_id", None)
+        name = getattr(pipeline, "name", "")
+        findings.append(Finding(f"pipeline:{pipeline_id}", "pipeline", name))
+
+    # SQL Dashboards
+    for dash in safe_iter(
+        "dashboards.list",
+        safe_list_call("dashboards.list", lambda: client.dashboards.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        dash_id = getattr(dash, "id", None)
+        name = getattr(dash, "name", "")
+        findings.append(Finding(f"sql-dashboard:{dash_id}", "sql_dashboard", name))
+
+    # Lakeview Dashboards
+    for dash in safe_iter(
+        "lakeview.list",
+        safe_list_call("lakeview.list", lambda: client.lakeview.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        dash_id = getattr(dash, "dashboard_id", None) or getattr(dash, "id", None)
+        name = getattr(dash, "display_name", "") or getattr(dash, "name", "")
+        findings.append(Finding(f"lakeview-dashboard:{dash_id}", "lakeview_dashboard", name))
+
+    # Queries
+    for query in safe_iter(
+        "queries.list",
+        safe_list_call("queries.list", lambda: client.queries.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        query_id = getattr(query, "id", None)
+        name = getattr(query, "name", "") or getattr(query, "display_name", "")
+        findings.append(Finding(f"sql-query:{query_id}", "sql_query", name))
+
+    # Query History
+    if include_query_history and hasattr(client, "query_history"):
+        for qh in safe_iter(
+            "query_history.list",
+            safe_list_call("query_history.list", lambda: client.query_history.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            query_id = getattr(qh, "query_id", None)
+            status = getattr(qh, "status", None)
+            findings.append(Finding(f"query-history:{query_id}", "query_history", str(status)))
+
+    # Alerts
+    for alert in safe_iter(
+        "alerts.list",
+        safe_list_call("alerts.list", lambda: client.alerts.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        alert_id = getattr(alert, "id", None)
+        name = getattr(alert, "name", "") or getattr(alert, "display_name", "")
+        findings.append(Finding(f"sql-alert:{alert_id}", "sql_alert", name))
+    
+    return findings
+
+
+def collect_mlflow_assets(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect MLflow experiments, models, and versions."""
+    findings = []
+    
+    # Experiments
+    for exp in safe_iter(
+        "experiments.list",
+        safe_list_call("experiments.list", lambda: client.experiments.list_experiments(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        exp_id = getattr(exp, "experiment_id", None)
+        name = getattr(exp, "name", "")
+        findings.append(Finding(f"mlflow-experiment:{exp_id}", "mlflow_experiment", name))
+
+    # Registered Models
+    for model in safe_iter(
+        "registered_models.list",
+        safe_list_call("registered_models.list", lambda: client.registered_models.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        model_name = getattr(model, "name", "")
+        findings.append(Finding(f"mlflow-model:{model_name}", "mlflow_model", model_name))
+        
+        # Model Versions
+        if hasattr(client, "model_versions") and model_name:
+            for mv in safe_iter(
+                f"model_versions.list({model_name})",
+                safe_list_call(
+                    f"model_versions.list({model_name})",
+                    lambda mn=model_name: client.model_versions.list(full_name=mn),
+                    warnings
+                ),
+                warnings,
+                batch_size,
+                batch_sleep_ms,
+            ):
+                version = getattr(mv, "version", "")
+                findings.append(Finding(f"model-version:{model_name}:{version}", "model_version", model_name))
+
+    # Feature Store
+    if hasattr(client, "feature_store"):
+        for fs in safe_iter(
+            "feature_store.list",
+            safe_list_call("feature_store.list", lambda: client.feature_store.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(fs, "name", "")
+            findings.append(Finding(f"feature-store:{name}", "feature_store", name))
+
+    # Feature Engineering
+    if hasattr(client, "feature_engineering"):
+        for fe in safe_iter(
+            "feature_engineering.list",
+            safe_list_call("feature_engineering.list", lambda: client.feature_engineering.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(fe, "name", "")
+            findings.append(Finding(f"feature-engineering:{name}", "feature_engineering", name))
+    
+    return findings
+
+
+def collect_unity_catalog(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect Unity Catalog assets."""
+    findings = []
+    
+    for catalog_obj in safe_iter(
+        "catalogs.list",
+        safe_list_call("catalogs.list", lambda: client.catalogs.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        catalog_name = getattr(catalog_obj, "name", "")
+        findings.append(Finding(f"uc-catalog:{catalog_name}", "uc_catalog", catalog_name))
+
+        # Schemas
+        for schema in safe_iter(
+            f"schemas.list({catalog_name})",
+            safe_list_call(f"schemas.list({catalog_name})", lambda cn=catalog_name: client.schemas.list(catalog_name=cn), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            schema_name = getattr(schema, "name", "")
+            findings.append(Finding(f"uc-schema:{catalog_name}.{schema_name}", "uc_schema", schema_name))
+
+            # Tables
+            for table in safe_iter(
+                f"tables.list({catalog_name}.{schema_name})",
+                safe_list_call(
+                    f"tables.list({catalog_name}.{schema_name})",
+                    lambda cn=catalog_name, sn=schema_name: client.tables.list(catalog_name=cn, schema_name=sn),
+                    warnings
+                ),
+                warnings,
+                batch_size,
+                batch_sleep_ms,
+            ):
+                table_name = getattr(table, "name", "")
+                findings.append(
+                    Finding(
+                        f"uc-table:{catalog_name}.{schema_name}.{table_name}",
+                        "uc_table",
+                        getattr(table, "table_type", ""),
+                    )
+                )
+
+            # Volumes
+            for vol in safe_iter(
+                f"volumes.list({catalog_name}.{schema_name})",
+                safe_list_call(
+                    f"volumes.list({catalog_name}.{schema_name})",
+                    lambda cn=catalog_name, sn=schema_name: client.volumes.list(catalog_name=cn, schema_name=sn),
+                    warnings
+                ),
+                warnings,
+                batch_size,
+                batch_sleep_ms,
+            ):
+                vol_name = getattr(vol, "name", "")
+                findings.append(Finding(f"uc-volume:{vol_name}", "uc_volume", vol_name))
+    
+    # External Locations
+    for eloc in safe_iter(
+        "external_locations.list",
+        safe_list_call("external_locations.list", lambda: client.external_locations.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        name = getattr(eloc, "name", "")
+        url = getattr(eloc, "url", "")
+        findings.append(Finding(f"external-location:{name}", "external_location", url))
+
+    # Storage Credentials
+    for cred in safe_iter(
+        "storage_credentials.list",
+        safe_list_call("storage_credentials.list", lambda: client.storage_credentials.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        name = getattr(cred, "name", "")
+        findings.append(Finding(f"storage-credential:{name}", "storage_credential", name))
+
+    # Connections
+    for conn in safe_iter(
+        "connections.list",
+        safe_list_call("connections.list", lambda: client.connections.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        name = getattr(conn, "name", "")
+        type_name = getattr(conn, "connection_type", "")
+        findings.append(Finding(f"connection:{name}", "connection", str(type_name)))
+
+    # Metastores
+    if hasattr(client, "metastores"):
+        for ms in safe_iter(
+            "metastores.list",
+            safe_list_call("metastores.list", lambda: client.metastores.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(ms, "name", "")
+            ms_id = getattr(ms, "metastore_id", "")
+            findings.append(Finding(f"metastore:{ms_id}", "metastore", name))
+    
+    return findings
+
+
+def collect_repos(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect Git repositories and credentials."""
+    findings = []
+    
+    # Repos
+    for repo in safe_iter(
+        "repos.list",
+        safe_list_call("repos.list", lambda: client.repos.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        repo_id = getattr(repo, "id", None)
+        path = getattr(repo, "path", "")
+        findings.append(Finding(f"repo:{repo_id}", "repo", path))
+
+    # Git Credentials
+    if hasattr(client, "git_credentials"):
+        for cred in safe_iter(
+            "git_credentials.list",
+            safe_list_call("git_credentials.list", lambda: client.git_credentials.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            cred_id = getattr(cred, "credential_id", None)
+            user = getattr(cred, "git_username", "")
+            findings.append(Finding(f"git-credential:{cred_id}", "git_credential", user))
+    
+    return findings
+
+
+def collect_security_assets(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect secret scopes, tokens, and IP access lists."""
+    findings = []
+    
+    # Secret Scopes
+    for scope in safe_iter(
+        "secrets.list_scopes",
+        safe_list_call("secrets.list_scopes", lambda: client.secrets.list_scopes(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        name = getattr(scope, "name", "")
+        findings.append(Finding(f"secret-scope:{name}", "secret_scope", name))
+
+    # Tokens
+    for token in safe_iter(
+        "tokens.list",
+        safe_list_call("tokens.list", lambda: client.tokens.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        token_id = getattr(token, "token_id", None)
+        creator = getattr(token, "created_by_username", "")
+        findings.append(Finding(f"token:{token_id}", "token", f"created_by={creator}"))
+
+    # IP Access Lists
+    if hasattr(client, "ip_access_lists"):
+        for ip in safe_iter(
+            "ip_access_lists.list",
+            safe_list_call("ip_access_lists.list", lambda: client.ip_access_lists.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            list_id = getattr(ip, "list_id", "")
+            label = getattr(ip, "label", "")
+            findings.append(Finding(f"ip-access-list:{list_id}", "ip_access_list", label))
+    
+    return findings
+
+
+def collect_identities(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect users, groups, and service principals."""
+    findings = []
+    
+    # Users
+    for user_obj in safe_iter(
+        "users.list",
+        safe_list_call("users.list", lambda: client.users.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms
+    ):
+        name = getattr(user_obj, "user_name", "") or getattr(user_obj, "userName", "")
+        user_id = getattr(user_obj, "id", "")
+        findings.append(Finding(f"user:{user_id}", "user", name))
+
+    # Groups
+    for group in safe_iter(
+        "groups.list",
+        safe_list_call("groups.list", lambda: client.groups.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms
+    ):
+        name = getattr(group, "display_name", "") or getattr(group, "displayName", "")
+        group_id = getattr(group, "id", "")
+        findings.append(Finding(f"group:{group_id}", "group", name))
+
+    # Service Principals
+    for sp in safe_iter(
+        "service_principals.list",
+        safe_list_call("service_principals.list", lambda: client.service_principals.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        name = getattr(sp, "display_name", "") or getattr(sp, "displayName", "")
+        sp_id = getattr(sp, "id", "")
+        findings.append(Finding(f"service-principal:{sp_id}", "service_principal", name))
+    
+    return findings
+
+
+def collect_serving_assets(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect serving endpoints, vector search, and online tables."""
+    findings = []
+    
+    # Serving Endpoints
+    for endpoint in safe_iter(
+        "serving_endpoints.list",
+        safe_list_call("serving_endpoints.list", lambda: client.serving_endpoints.list(), warnings),
+        warnings,
+        batch_size,
+        batch_sleep_ms,
+    ):
+        name = getattr(endpoint, "name", "")
+        findings.append(Finding(f"serving-endpoint:{name}", "serving_endpoint", name))
+
+    # Vector Search Endpoints
+    if hasattr(client, "vector_search_endpoints"):
+        for vse in safe_iter(
+            "vector_search_endpoints.list",
+            safe_list_call("vector_search_endpoints.list", lambda: client.vector_search_endpoints.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(vse, "name", "")
+            findings.append(Finding(f"vector-search-endpoint:{name}", "vector_search_endpoint", name))
+
+    # Vector Search Indexes
+    if hasattr(client, "vector_search_indexes"):
+        for vsi in safe_iter(
+            "vector_search_indexes.list",
+            safe_list_call("vector_search_indexes.list", lambda: client.vector_search_indexes.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(vsi, "name", "")
+            findings.append(Finding(f"vector-search-index:{name}", "vector_search_index", name))
+
+    # Online Tables
+    if hasattr(client, "online_tables"):
+        for ot in safe_iter(
+            "online_tables.list",
+            safe_list_call("online_tables.list", lambda: client.online_tables.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(ot, "name", "")
+            findings.append(Finding(f"online-table:{name}", "online_table", name))
+    
+    return findings
+
+
+def collect_sharing(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect Delta Sharing assets."""
+    findings = []
+    
+    # Shares
+    if hasattr(client, "shares"):
+        for share in safe_iter(
+            "shares.list",
+            safe_list_call("shares.list", lambda: client.shares.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(share, "name", "")
+            findings.append(Finding(f"share:{name}", "share", name))
+
+    # Recipients
+    if hasattr(client, "recipients"):
+        for rec in safe_iter(
+            "recipients.list",
+            safe_list_call("recipients.list", lambda: client.recipients.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(rec, "name", "")
+            findings.append(Finding(f"recipient:{name}", "recipient", name))
+
+    # Providers
+    if hasattr(client, "providers"):
+        for prov in safe_iter(
+            "providers.list",
+            safe_list_call("providers.list", lambda: client.providers.list(), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            name = getattr(prov, "name", "")
+            findings.append(Finding(f"provider:{name}", "provider", name))
+    
+    return findings
+
+
+def collect_dbfs(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int
+) -> List[Finding]:
+    """Collect DBFS root listing."""
+    findings = []
+    
+    if hasattr(client, "dbfs"):
+        for file_info in safe_iter(
+            "dbfs.list",
+            safe_list_call("dbfs.list", lambda: client.dbfs.list(path="/"), warnings),
+            warnings,
+            batch_size,
+            batch_sleep_ms,
+        ):
+            path = getattr(file_info, "path", "")
+            is_dir = getattr(file_info, "is_dir", False)
+            kind = "dbfs_dir" if is_dir else "dbfs_file"
+            findings.append(Finding(path, kind, "dbfs root"))
+    
+    return findings
+
+
+COLLECTOR_REGISTRY = {
+    "workspace": collect_workspace_objects,
+    "jobs": collect_jobs,
+    "clusters": collect_clusters,
+    "sql": collect_sql_assets,
+    "mlflow": collect_mlflow_assets,
+    "unity_catalog": collect_unity_catalog,
+    "repos": collect_repos,
+    "security": collect_security_assets,
+    "identities": collect_identities,
+    "serving": collect_serving_assets,
+    "sharing": collect_sharing,
+    "dbfs": collect_dbfs,
+}
+
+
+def collect_all_findings(
+    client: WorkspaceClient,
+    include_runs: bool,
+    include_query_history: bool,
+    include_dbfs: bool,
+    batch_size: int,
+    batch_sleep_ms: int,
+) -> Tuple[List[Finding], List[str]]:
+    """Collect all findings from Databricks workspace.
+    
+    Args:
+        client: Databricks WorkspaceClient
+        include_runs: Whether to include job runs
+        include_query_history: Whether to include query history
+        include_dbfs: Whether to include DBFS listing
+        batch_size: Items per batch before sleeping
+        batch_sleep_ms: Sleep time in ms between batches
+        
+    Returns:
+        Tuple of (findings list, warnings list)
+    """
+    warnings: List[str] = []
+    all_findings: List[Finding] = []
+    
+    # Collect from all sources
+    all_findings.extend(collect_workspace_objects(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_jobs(client, include_runs, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_clusters(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_sql_assets(client, include_query_history, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_mlflow_assets(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_unity_catalog(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_repos(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_security_assets(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_identities(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_serving_assets(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_sharing(client, warnings, batch_size, batch_sleep_ms))
+    
+    if include_dbfs:
+        all_findings.extend(collect_dbfs(client, warnings, batch_size, batch_sleep_ms))
+    
+    return all_findings, warnings
+
+
+def collect_findings_selective(
+    client: WorkspaceClient,
+    collectors: str,
+    include_runs: bool,
+    include_query_history: bool,
+    batch_size: int,
+    batch_sleep_ms: int,
+) -> Tuple[List[Finding], List[str]]:
+    """Collect findings from selected collectors only.
+    
+    Args:
+        client: Databricks WorkspaceClient
+        collectors: Comma-separated list of collector names (workspace,jobs,clusters,sql,mlflow,unity_catalog,repos,security,identities,serving,sharing,dbfs)
+        include_runs: Whether to include job runs
+        include_query_history: Whether to include query history
+        batch_size: Items per batch before sleeping
+        batch_sleep_ms: Sleep time in ms between batches
+        
+    Returns:
+        Tuple of (findings list, warnings list)
+    """
+    warnings: List[str] = []
+    all_findings: List[Finding] = []
+    
+    collector_names = [c.strip() for c in collectors.split(",")]
+    
+    for name in collector_names:
+        if name not in COLLECTOR_REGISTRY:
+            warnings.append(f"Unknown collector: {name}")
+            continue
+        
+        collector_fn = COLLECTOR_REGISTRY[name]
+        
+        if name == "jobs":
+            all_findings.extend(collector_fn(client, include_runs, warnings, batch_size, batch_sleep_ms))
+        elif name == "sql":
+            all_findings.extend(collector_fn(client, include_query_history, warnings, batch_size, batch_sleep_ms))
+        else:
+            all_findings.extend(collector_fn(client, warnings, batch_size, batch_sleep_ms))
+    
+    return all_findings, warnings
