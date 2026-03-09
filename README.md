@@ -88,6 +88,95 @@ DATABRICKS_TOKEN=<pat>
 - `AZURE`: Skips Instance Profiles (Azure uses Managed Identities)
 - `GCP`: Skips Instance Profiles (GCP uses Service Accounts)
 
+## Required Permissions
+
+The user running this inventory script needs specific API permissions to access workspace assets.
+
+### Minimum Required Permissions
+
+The script requires **Admin panel access** or the following permissions:
+
+| API Group | Required Permissions | Collectors Affected |
+|-----------|----------------------|---------------------|
+| **Workspace** | `workspace:read` (view notebooks, directories, files) | workspace |
+| **Jobs** | `jobs:read` (list and view job details) | jobs |
+| **Clusters** | `clusters:read` (list clusters and policies) | clusters |
+| **SQL** | `sql:read` (view warehouses, dashboards, queries, alerts) | sql |
+| **MLflow** | `experiments:read` (view experiments and models) | mlflow |
+| **Unity Catalog** | `catalogs:read`, `schemas:read`, `tables:read`, `volumes:read`, `external_locations:read` | unity_catalog |
+| **Repos** | `repos:read` (list repositories) | repos |
+| **Secrets** | `secrets:read` (list secret scopes) | security |
+| **Users/Identities** | `users:read`, `groups:read`, `service_principals:read` | identities |
+| **Serving** | `serving_endpoints:read`, `vector_search_endpoints:read` | serving |
+| **Sharing** | `shares:read` (Delta Sharing) | sharing |
+| **DBFS** | `dbfs:read` (if `--include-dbfs` is used) | dbfs |
+
+### Recommended Role
+
+For a read-only inventory scan, create or request a role with these permissions:
+```json
+{
+  "name": "inventory_reader",
+  "permissions": [
+    "workspace:read",
+    "jobs:read",
+    "clusters:read",
+    "sql:read",
+    "experiments:read",
+    "catalogs:read",
+    "schemas:read",
+    "tables:read",
+    "volumes:read",
+    "external_locations:read",
+    "repos:read",
+    "secrets:read",
+    "users:read",
+    "groups:read",
+    "service_principals:read",
+    "serving_endpoints:read",
+    "vector_search_endpoints:read",
+    "shares:read"
+  ]
+}
+```
+
+### Checking Your Permissions
+
+To verify what access the current user has, run with debug logging:
+```bash
+python -m databricks_inventory \
+  --source sdk \
+  --out report.md \
+  --log-level debug
+```
+
+The debug output will show which endpoints succeed and which fail due to insufficient permissions. Failed endpoints will be listed in the `Warnings` sheet of the Excel report.
+
+### API Endpoint Reference
+
+Each collector accesses specific Databricks APIs:
+
+- **workspace**: `workspace.list`, `workspace.export` (for notebook source code)
+- **jobs**: `jobs.list`, `jobs.list_runs` (optional)
+- **clusters**: `clusters.list`, `cluster_policies.list`, `global_init_scripts.list`, `instance_pools.list`, `instance_profiles.list`
+- **sql**: `warehouses.list`, `dashboards.list`, `queries.list`, `alerts.list`, `pipelines.list`
+- **mlflow**: `experiments.list`, `registered_models.list`, `model_versions.list`
+- **unity_catalog**: `catalogs.list`, `schemas.list`, `tables.list`, `volumes.list`, `external_locations.list`, `storage_credentials.list`, `connections.list`, `metastores.list`
+- **repos**: `repos.list`, `git_credentials.list`
+- **security**: `secrets.list_scopes`, `tokens.list`, `ip_access_lists.list`
+- **identities**: `users.list`, `groups.list`, `service_principals.list`
+- **serving**: `serving_endpoints.list`, `vector_search_endpoints.list`, `online_tables.list`
+- **sharing**: `shares.list`, `recipients.list`, `providers.list`
+- **dbfs**: `dbfs.list` (optional, heavy collector)
+
+### Notes on Cloud-Specific APIs
+
+- **AWS**: Instance Profiles API requires additional AWS IAM permissions
+- **Azure**: Instance Profiles are not available (uses Managed Identities instead)
+- **GCP**: Instance Profiles are not available (uses Service Accounts instead)
+
+When `DATABRICKS_CLOUD_PROVIDER` is set correctly, the script automatically skips cloud-specific non-applicable APIs.
+
 ## Run (Direct)
 ```bash
 python -m databricks_inventory \
