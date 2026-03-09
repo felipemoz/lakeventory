@@ -74,6 +74,6 @@ databricks_full.xlsx
 !README.md
 !docs/
 !docs/*.md
-/output/*
-.reports/*
+/output/
+.reports/
 
