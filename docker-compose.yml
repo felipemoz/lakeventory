@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  lakeventory:
+    build: .
+    container_name: lakeventory
+    environment:
+      # Required
+      DATABRICKS_HOST: "https://<workspace-host>"
+      # Choose one auth method:
+      # DATABRICKS_TOKEN: "<pat-token>"
+      # DATABRICKS_CLIENT_ID: "<service-principal-id>"
+      # DATABRICKS_CLIENT_SECRET: "<service-principal-secret>"
+
+      # Scheduling
+      RUN_INTERVAL_MINUTES: "1440"  # once per day
+      INCREMENTAL_AFTER_FIRST: "1"
+      FORCE_FULL: "0"
+
+      # Output
+      OUTPUT_DIR: "/data"
+      CACHE_DIR: "/cache"
+      OUT: "report.md"
+      OUT_XLSX: "report.xlsx"
+
+      # Optional behavior
+      LOG_LEVEL: "info"
+      BATCH_SIZE: "200"
+      BATCH_SLEEP_MS: "0"
+      SERVERLESS: "0"
+      INCLUDE_RUNS: "0"
+      INCLUDE_QUERY_HISTORY: "0"
+      INCLUDE_DBFS: "0"
+      COLLECTORS: ""
+
+    volumes:
+      - lakeventory_output:/data
+      - lakeventory_cache:/cache
+
+volumes:
+  lakeventory_output:
+  lakeventory_cache:
