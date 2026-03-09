@@ -22,7 +22,7 @@ def test_write_markdown(tmp_path: Path):
     write_markdown(findings, warnings, out_path)
 
     text = out_path.read_text(encoding="utf-8")
-    assert "Databricks AS-IS Inventory" in text
+    assert "Lakeventory Results" in text
     assert "kind_a" in text
     assert "lockin_count=2" in text
 
