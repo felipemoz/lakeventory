@@ -21,7 +21,7 @@ def summarize(findings: List[Finding], warnings: List[str]) -> Tuple[str, List[s
     for f in findings:
         counts[f.kind] = counts.get(f.kind, 0) + 1
 
-    summary_lines = ["# Databricks AS-IS Inventory", ""]
+    summary_lines = ["# Lakeventory Results", ""]
     summary_lines.append("## Summary")
     summary_lines.append("")
     for kind in sorted(counts.keys()):
