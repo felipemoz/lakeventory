@@ -1,4 +1,4 @@
-"""Configuration and constants for Databricks inventory."""
+"""Configuration and constants for Lakeventory."""
 
 SHEET_ORDER = [
     "Notebooks",

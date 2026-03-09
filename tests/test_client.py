@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-import databricks_inventory.client as client
+import lakeventory.client as client
 
 
 class FakeWorkspaceClient:

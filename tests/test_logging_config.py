@@ -1,6 +1,6 @@
 import logging
 
-from databricks_inventory.logging_config import configure_logging
+from lakeventory.logging_config import configure_logging
 
 
 def test_configure_logging_debug():

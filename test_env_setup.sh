@@ -17,7 +17,7 @@ python3 << 'PYEOF'
 import sys
 sys.path.insert(0, '/Users/fmoz/Desktop/pp/inventory')
 from pathlib import Path
-from databricks_inventory.client import load_output_dir
+from lakeventory.client import load_output_dir
 
 test_dir = Path(sys.argv[1])
 result = load_output_dir(test_dir)

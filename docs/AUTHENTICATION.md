@@ -31,7 +31,7 @@ DATABRICKS_CLIENT_SECRET=<service-principal-secret>
 
 **GitHub Actions:**
 ```yaml
-name: Run Databricks Inventory
+name: Run Lakeventory
 on: [push]
 
 jobs:
@@ -44,7 +44,7 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_CLIENT_ID: ${{ secrets.SP_CLIENT_ID }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.SP_CLIENT_SECRET }}
-        run: python -m databricks_inventory --source sdk
+        run: python -m lakeventory --source sdk
 ```
 
 **Jenkins/GitLab CI:**
@@ -52,14 +52,14 @@ jobs:
 export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
 export DATABRICKS_CLIENT_ID="a1b2c3d4-e5f6-7890-1234-567890abcdef"
 export DATABRICKS_CLIENT_SECRET="<secret-from-secure-storage>"
-python -m databricks_inventory --source sdk
+python -m lakeventory --source sdk
 ```
 
 ### Verify Access
 
 ```bash
 # Check which auth method is detected
-python -m databricks_inventory --log-level debug --root . 2>&1 | grep "authentication method"
+python -m lakeventory --log-level debug --root . 2>&1 | grep "authentication method"
 # Output: INFO Detected authentication method: Service Principal (Client ID: a1b2c3d4...)
 
 # Run health check
@@ -123,5 +123,5 @@ The first one found will be used. If multiple are configured, only the highest p
 ### Debug Auth Detection
 
 ```bash
-python -m databricks_inventory --log-level debug 2>&1 | grep -i "authentication"
+python -m lakeventory --log-level debug 2>&1 | grep -i "authentication"
 ```

@@ -64,10 +64,10 @@ test:
 check:
 	@echo "🔍 Running health check..."
 	@echo ""
-	$(PYTHON) -m databricks_inventory.health_check
+	$(PYTHON) -m lakeventory.health_check
 
 inventory:
-	$(PYTHON) -m databricks_inventory \
+	$(PYTHON) -m lakeventory \
 		--source sdk \
 		--out $(OUT) \
 		--log-level $(LOG_LEVEL) \
@@ -77,7 +77,7 @@ inventory:
 		--batch-sleep-ms $(BATCH_SLEEP_MS) $(if $(filter 1,$(SERVERLESS)),--serverless,)
 
 inventory-basic:
-	$(PYTHON) -m databricks_inventory \
+	$(PYTHON) -m lakeventory \
 		--source sdk \
 		--out $(OUT) \
 		--log-level $(LOG_LEVEL) \
@@ -85,13 +85,13 @@ inventory-basic:
 		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),)
 
 inventory-validate:
-	$(PYTHON) -m databricks_inventory \
+	$(PYTHON) -m lakeventory \
 		--source sdk \
 		--validate-permissions \
 		--log-level $(LOG_LEVEL)
 
 inventory-batch:
-	$(PYTHON) -m databricks_inventory \
+	$(PYTHON) -m lakeventory \
 		--source sdk \
 		--out $(OUT) \
 		--log-level $(LOG_LEVEL) \
@@ -101,7 +101,7 @@ inventory-batch:
 		--batch-sleep-ms $(BATCH_SLEEP_MS)
 
 inventory-serverless:
-	$(PYTHON) -m databricks_inventory \
+	$(PYTHON) -m lakeventory \
 		--source sdk \
 		--serverless \
 		--out $(OUT) \
@@ -110,7 +110,7 @@ inventory-serverless:
 		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),)
 
 inventory-no-progress:
-	INVENTORY_PROGRESS=0 $(PYTHON) -m databricks_inventory \
+	INVENTORY_PROGRESS=0 $(PYTHON) -m lakeventory \
 		--source sdk \
 		--out $(OUT) \
 		--log-level $(LOG_LEVEL) \
@@ -130,7 +130,7 @@ inventory-verbose:
 
 inventory-selective:
 	@echo "Run specific collectors with COLLECTORS=workspace,jobs,clusters"
-	$(PYTHON) -m databricks_inventory \
+	$(PYTHON) -m lakeventory \
 		--source sdk \
 		--out $(OUT) \
 		--log-level $(LOG_LEVEL) \
@@ -141,7 +141,7 @@ inventory-selective:
 		--batch-sleep-ms $(BATCH_SLEEP_MS) $(if $(filter 1,$(SERVERLESS)),--serverless,)
 
 inventory-full:
-	$(PYTHON) -m databricks_inventory \
+	$(PYTHON) -m lakeventory \
 		--source sdk \
 		--out $(OUT) \
 		--log-level $(LOG_LEVEL) \
@@ -155,7 +155,7 @@ inventory-full:
 
 inventory-incremental:
 	@echo "Running incremental inventory (delta mode - only changes since last run)"
-	$(PYTHON) -m databricks_inventory \
+	$(PYTHON) -m lakeventory \
 		--source sdk \
 		--out $(OUT) \
 		--log-level $(LOG_LEVEL) \
@@ -166,8 +166,8 @@ inventory-incremental:
 		--incremental $(if $(filter 1,$(SERVERLESS)),--serverless,)
 
 cache-info:
-	$(PYTHON) -c "from databricks_inventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); info = c.get_cache_info(); print(f'Cache dir: {info[\"cache_dir\"]}'); print(f'Snapshots: {info[\"total_snapshots\"]}'); [print(f'  - {s}') for s in info['snapshots']]"
+	$(PYTHON) -c "from lakeventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); info = c.get_cache_info(); print(f'Cache dir: {info[\"cache_dir\"]}'); print(f'Snapshots: {info[\"total_snapshots\"]}'); [print(f'  - {s}') for s in info['snapshots']]"
 
 cache-clear:
 	@echo "Clearing inventory cache..."
-	$(PYTHON) -c "from databricks_inventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); deleted = c.clear_cache(); print(f'Deleted {deleted} snapshot files')"
+	$(PYTHON) -c "from lakeventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); deleted = c.clear_cache(); print(f'Deleted {deleted} snapshot files')"

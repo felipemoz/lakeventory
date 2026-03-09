@@ -104,7 +104,7 @@ The user running this inventory script needs specific API permissions to access 
 Before running the full inventory, validate that your user has the required permissions:
 
 ```bash
-python -m databricks_inventory --validate-permissions --source sdk
+python -m lakeventory --validate-permissions --source sdk
 ```
 
 This will:

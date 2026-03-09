@@ -14,7 +14,7 @@ def test_health_check_missing_databricks_host():
             del os.environ["DATABRICKS_HOST"]
         
         # Import and run health check
-        from databricks_inventory import health_check
+        from lakeventory import health_check
         
         # The module itself doesn't have a function to test directly,
         # but we can verify the logic by checking that it would fail
@@ -35,7 +35,7 @@ def test_health_check_missing_dependencies():
 
 def test_health_check_can_import():
     """Test that health_check module can be imported."""
-    from databricks_inventory import health_check
+    from lakeventory import health_check
     assert health_check is not None
 
 

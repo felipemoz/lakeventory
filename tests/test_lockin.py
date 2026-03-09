@@ -1,4 +1,4 @@
-from databricks_inventory.lockin import analyze_cloud_lockin
+from lakeventory.lockin import analyze_cloud_lockin
 
 
 def test_analyze_cloud_lockin_detects_aws_and_azure():

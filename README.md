@@ -1,4 +1,4 @@
-# Databricks Inventory Tool
+# Lakeventory
 
 Automated discovery and inventory of Databricks workspace assets and dependencies. Exports to Markdown or Excel with cloud provider detection and workspace ID auto-sensing.
 
@@ -9,10 +9,10 @@ Automated discovery and inventory of Databricks workspace assets and dependencie
 pip install -r requirements.txt
 
 # Run basic inventory
-python -m databricks_inventory --source sdk --out report.md
+python -m lakeventory --source sdk --out report.md
 
 # Or with Excel output
-python -m databricks_inventory --source sdk --out-xlsx report.xlsx
+python -m lakeventory --source sdk --out-xlsx report.xlsx
 ```
 
 **Via Makefile:**
@@ -93,32 +93,32 @@ This validates:
 
 ### Standard Run
 ```bash
-python -m databricks_inventory --source sdk --out report.md
+python -m lakeventory --source sdk --out report.md
 ```
 
 ### With Excel Output
 ```bash
-python -m databricks_inventory --source sdk --out-xlsx report.xlsx
+python -m lakeventory --source sdk --out-xlsx report.xlsx
 ```
 
 ### Validate Permissions First
 ```bash
-python -m databricks_inventory --validate-permissions --source sdk
+python -m lakeventory --validate-permissions --source sdk
 ```
 
 ### Selective Collectors
 ```bash
-python -m databricks_inventory --source sdk --collectors workspace,jobs,clusters
+python -m lakeventory --source sdk --collectors workspace,jobs,clusters
 ```
 
 ### Serverless Workspace
 ```bash
-python -m databricks_inventory --source sdk --serverless
+python -m lakeventory --source sdk --serverless
 ```
 
 ### Large Workspaces (with batching)
 ```bash
-python -m databricks_inventory --source sdk \
+python -m lakeventory --source sdk \
   --batch-size 100 --batch-sleep-ms 300
 ```
 
@@ -155,7 +155,7 @@ output/<workspace_id>_report_20260309_1549.md
 ## Project Structure
 
 ```
-databricks_inventory/
+lakeventory/
 ├── __main__.py          # CLI entry point
 ├── inventory_cli.py     # Command-line interface
 ├── client.py            # Authentication

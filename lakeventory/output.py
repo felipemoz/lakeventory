@@ -112,7 +112,7 @@ def write_delta_markdown(
         warnings: List of warnings from collection
         out_path: Path to output markdown file
     """
-    lines = ["# Databricks Inventory Delta Report", ""]
+    lines = ["# Lakeventory Delta Report", ""]
     lines.append("## Changes Summary")
     lines.append("")
     lines.append(f"- ✨ **Added:** {stats.get('added', 0)}")

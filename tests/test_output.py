@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from databricks_inventory.models import Finding
-from databricks_inventory.output import summarize, write_markdown, write_excel
+from lakeventory.models import Finding
+from lakeventory.output import summarize, write_markdown, write_excel
 
 
 def test_summarize_includes_warnings():

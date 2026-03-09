@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from databricks_inventory.cache import InventoryCache
-from databricks_inventory.models import Finding
+from lakeventory.cache import InventoryCache
+from lakeventory.models import Finding
 
 
 def test_cache_save_snapshot():

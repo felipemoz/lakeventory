@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from databricks_inventory.models import Finding
-from databricks_inventory.output import write_delta_markdown, write_delta_excel
+from lakeventory.models import Finding
+from lakeventory.output import write_delta_markdown, write_delta_excel
 
 
 def test_write_delta_markdown():

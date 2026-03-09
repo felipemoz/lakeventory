@@ -1,4 +1,4 @@
-from databricks_inventory import utils
+from lakeventory import utils
 
 
 def test_safe_iter_batches_and_sleep(monkeypatch):

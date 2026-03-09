@@ -33,7 +33,7 @@ DATABRICKS_PASSWORD=...
 ### Error: "403 Forbidden" on specific API
 **Solution:** Run permission validation to identify missing permissions:
 ```bash
-python -m databricks_inventory --validate-permissions --source sdk
+python -m lakeventory --validate-permissions --source sdk
 ```
 See [PERMISSIONS.md](PERMISSIONS.md) for required permissions.
 
@@ -41,7 +41,7 @@ See [PERMISSIONS.md](PERMISSIONS.md) for required permissions.
 **Cause:** User lacks permissions for certain APIs  
 **Solution:** Check the `Warnings` sheet in Excel or run:
 ```bash
-python -m databricks_inventory --log-level debug 2>&1 | grep "not available"
+python -m lakeventory --log-level debug 2>&1 | grep "not available"
 ```
 
 ---
@@ -52,7 +52,7 @@ python -m databricks_inventory --log-level debug 2>&1 | grep "not available"
 **Cause:** Workspace is too large or network is slow  
 **Solution:** Use batching to reduce API call volume:
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --batch-size 50 \
   --batch-sleep-ms 500
@@ -67,7 +67,7 @@ python -m databricks_inventory \
 **Cause:** API timeout during large list operations  
 **Solution:** Add batching and sleep:
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --batch-size 100 \
   --batch-sleep-ms 1000
@@ -82,7 +82,7 @@ python -m databricks_inventory \
 **Solution:**
 1. Skip unnecessary heavy collectors:
    ```bash
-   python -m databricks_inventory \
+  python -m lakeventory \
      --source sdk \
      --skip-heavy-collectors
    # or exclude specific ones
@@ -91,7 +91,7 @@ python -m databricks_inventory \
 
 2. Use batching:
    ```bash
-   python -m databricks_inventory \
+  python -m lakeventory \
      --source sdk \
      --batch-size 100 \
      --batch-sleep-ms 200
@@ -99,7 +99,7 @@ python -m databricks_inventory \
 
 3. Disable progress bars:
    ```bash
-   INVENTORY_PROGRESS=0 python -m databricks_inventory --source sdk --out report.md
+  INVENTORY_PROGRESS=0 python -m lakeventory --source sdk --out report.md
    ```
 
 ---
@@ -126,7 +126,7 @@ Valid values: `AWS`, `AZURE`, `GCP`
 ### Error: "Output directory not found"
 **Solution:** Ensure directory exists or is accessible:
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --out-dir ./my-reports \
   --out report.md
@@ -135,7 +135,7 @@ python -m databricks_inventory \
 ### Excel file is corrupted
 **Solution:** Regenerate the file:
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --out-xlsx report.xlsx
 ```
@@ -168,7 +168,7 @@ pip install openpyxl
 
 ### Enable detailed logging
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --log-level debug \
   --out report.md 2>&1 | tee debug.log
@@ -176,13 +176,13 @@ python -m databricks_inventory \
 
 ### Check which endpoints are being called
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --log-level debug 2>&1 | grep "workspace.list\|jobs.list\|clusters.list"
 ```
 
 ### Identify permission failures
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --log-level debug 2>&1 | grep "403\|Forbidden\|not available"
 ```
 
@@ -192,6 +192,6 @@ python -m databricks_inventory \
 
 1. Check the `Warnings` sheet in Excel output for API errors
 2. Run `make check` to verify environment setup
-3. Run `python -m databricks_inventory --validate-permissions` to check access
+3. Run `python -m lakeventory --validate-permissions` to check access
 4. Enable debug logging: `--log-level debug`
 5. Open an issue with debug output and error message

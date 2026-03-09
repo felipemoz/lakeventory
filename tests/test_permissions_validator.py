@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 import pytest
 
-from databricks_inventory.permissions_validator import PermissionsValidator
+from lakeventory.permissions_validator import PermissionsValidator
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ Successfully implemented **Feature #1: Caching + Incremental Updates** from the 
 
 ## 📦 New Modules & Components
 
-### 1. `databricks_inventory/cache.py` — Cache Management
+### 1. `lakeventory/cache.py` — Cache Management
 - **InventoryCache** class for managing inventory snapshots
 - Store previous inventory results as JSON snapshots (timestamped)
 - Load and compare against latest snapshot
@@ -33,7 +33,7 @@ info = cache.get_cache_info()  # List all snapshots
 count = cache.clear_cache()  # Delete all snapshots
 ```
 
-### 2. Enhanced `databricks_inventory/output.py` — Delta Reporting
+### 2. Enhanced `lakeventory/output.py` — Delta Reporting
 Added two new delta output functions:
 ```python
 write_delta_markdown(delta_findings, stats, warnings, out_path)
@@ -46,7 +46,7 @@ Delta reports show:
 - **Categorized Sheets:** Organized by item kind (Notebooks, Jobs, Clusters, etc.)
 - **Warnings Sheet:** Any warnings from collection
 
-### 3. Updated `databricks_inventory/inventory_cli.py` — CLI Integration
+### 3. Updated `lakeventory/inventory_cli.py` — CLI Integration
 New command-line flags:
 ```bash
 --incremental          # Enable delta mode (only report changes)
@@ -108,13 +108,13 @@ make inventory-incremental
 
 ```bash
 # First run: collect and cache
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --out report.md \
   --out-xlsx report.xlsx
 
 # Second run: get only changes
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --out report_delta.md \
   --out-xlsx report_delta.xlsx \
@@ -131,7 +131,7 @@ make cache-info
 make cache-clear
 
 # Or via CLI
-python -m databricks_inventory --incremental --cache-dir /custom/path
+python -m lakeventory --incremental --cache-dir /custom/path
 ```
 
 ## 🎯 Performance Impact
@@ -150,7 +150,7 @@ python -m databricks_inventory --incremental --cache-dir /custom/path
 ## 📁 New Files Created
 
 ```
-databricks_inventory/
+lakeventory/
 ├── cache.py                    # NEW: Cache management
 ├── inventory_cli.py            # UPDATED: Added --incremental flags
 ├── output.py                   # UPDATED: Added delta output functions

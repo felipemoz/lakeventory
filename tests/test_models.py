@@ -1,4 +1,4 @@
-from databricks_inventory.models import Finding
+from lakeventory.models import Finding
 
 
 def test_finding_fields():

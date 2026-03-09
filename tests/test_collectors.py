@@ -1,13 +1,13 @@
 import os
 import base64
 
-from databricks_inventory.collectors import (
+from lakeventory.collectors import (
     collect_workspace_objects,
     collect_jobs,
     collect_clusters,
     collect_findings_selective,
 )
-from databricks_inventory.models import Finding
+from lakeventory.models import Finding
 
 
 class Obj:

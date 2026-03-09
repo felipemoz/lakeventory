@@ -1,4 +1,4 @@
-"""Command-line interface for Databricks inventory."""
+"""Command-line interface for Lakeventory."""
 
 import argparse
 import logging
@@ -8,17 +8,17 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
-from databricks_inventory.cache import InventoryCache
-from databricks_inventory.client import build_workspace_client, load_output_dir
-from databricks_inventory.collectors import collect_all_findings, collect_findings_selective
-from databricks_inventory.logging_config import configure_logging
-from databricks_inventory.output import (
+from lakeventory.cache import InventoryCache
+from lakeventory.client import build_workspace_client, load_output_dir
+from lakeventory.collectors import collect_all_findings, collect_findings_selective
+from lakeventory.logging_config import configure_logging
+from lakeventory.output import (
     write_delta_excel,
     write_delta_markdown,
     write_excel,
     write_markdown,
 )
-from databricks_inventory.permissions_validator import PermissionsValidator
+from lakeventory.permissions_validator import PermissionsValidator
 
 
 logger = logging.getLogger(__name__)

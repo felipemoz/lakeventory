@@ -4,17 +4,17 @@
 
 ### Basic Run
 ```bash
-python -m databricks_inventory --source sdk --out report.md
+python -m lakeventory --source sdk --out report.md
 ```
 
 ### With Excel Output
 ```bash
-python -m databricks_inventory --source sdk --out-xlsx report.xlsx
+python -m lakeventory --source sdk --out-xlsx report.xlsx
 ```
 
 ### With Batching (for large workspaces)
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --out report.md \
   --batch-size 100 \
@@ -68,7 +68,7 @@ OUTPUT_DIR=./my-reports
 
 Via CLI (highest priority):
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --out-dir reports \
   --out report.md
@@ -88,7 +88,7 @@ output/<workspace_id>_report_20260309_1549.xlsx
 
 ### Include Heavy Collectors
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --include-runs \
   --include-query-history \
@@ -97,7 +97,7 @@ python -m databricks_inventory \
 
 ### Run Only Specific Collectors
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --collectors workspace,jobs,clusters,sql
 ```
@@ -118,7 +118,7 @@ Available collectors:
 
 ### Serverless Workspace
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --serverless
 ```
@@ -131,7 +131,7 @@ This skips cluster-related collectors automatically.
 
 ### Logging Levels
 ```bash
-python -m databricks_inventory \
+python -m lakeventory \
   --source sdk \
   --out report.md \
   --log-level debug  # error, info, verbose, debug
@@ -139,7 +139,7 @@ python -m databricks_inventory \
 
 ### Disable Progress Bars
 ```bash
-INVENTORY_PROGRESS=0 python -m databricks_inventory --source sdk --out report.md
+INVENTORY_PROGRESS=0 python -m lakeventory --source sdk --out report.md
 ```
 
 ---
