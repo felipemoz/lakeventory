@@ -24,7 +24,7 @@ from databricks_inventory.permissions_validator import PermissionsValidator
 logger = logging.getLogger(__name__)
 
 
-def extract_workspace_id(host: str) -> str:
+def _extract_workspace_id(host: str) -> str:
     if not host:
         return "workspace"
     parsed = urlparse(host)
@@ -39,7 +39,7 @@ def extract_workspace_id(host: str) -> str:
     return safe or "workspace"
 
 
-def apply_workspace_id(name: str, workspace_id: str) -> str:
+def _apply_workspace_id(name: str, workspace_id: str) -> str:
     if "workspace_id" in name:
         return name.replace("workspace_id", workspace_id)
     path = Path(name)
@@ -151,7 +151,7 @@ def main() -> int:
             return path.with_name(f"{path.stem}_{timestamp}{path.suffix}")
         return path.with_name(f"{path.name}_{timestamp}")
 
-    workspace_id = extract_workspace_id(os.getenv("DATABRICKS_HOST", ""))
+    workspace_id = _extract_workspace_id(os.getenv("DATABRICKS_HOST", ""))
     logger.info("Using workspace_id: %s", workspace_id)
     if args.serverless:
         logger.info("Running in serverless mode (cluster collectors skipped)")
@@ -206,7 +206,7 @@ def main() -> int:
             batch_sleep_ms=args.batch_sleep_ms,
         )
 
-    out_name = apply_workspace_id(Path(args.out).name, workspace_id)
+    out_name = _apply_workspace_id(Path(args.out).name, workspace_id)
     out_path = out_dir / with_timestamp(Path(out_name))
 
     # Handle incremental mode
@@ -228,7 +228,7 @@ def main() -> int:
         write_delta_markdown(delta_findings, stats, warnings, out_path)
         
         if args.out_xlsx:
-            xlsx_name = apply_workspace_id(Path(args.out_xlsx).name, workspace_id)
+            xlsx_name = _apply_workspace_id(Path(args.out_xlsx).name, workspace_id)
             xlsx_path = out_dir / with_timestamp(Path(xlsx_name))
             logger.info("Writing delta Excel report...")
             write_delta_excel(delta_findings, stats, warnings, xlsx_path)
@@ -242,7 +242,7 @@ def main() -> int:
         write_markdown(findings, warnings, out_path)
 
         if args.out_xlsx:
-            xlsx_name = apply_workspace_id(Path(args.out_xlsx).name, workspace_id)
+            xlsx_name = _apply_workspace_id(Path(args.out_xlsx).name, workspace_id)
             xlsx_path = out_dir / with_timestamp(Path(xlsx_name))
             logger.info("Writing Excel report...")
             write_excel(findings, warnings, xlsx_path)

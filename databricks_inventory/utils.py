@@ -56,7 +56,7 @@ def safe_iter(label: str, iterator, warnings: List[str], batch_size: int, sleep_
         warnings.append(f"{label} failed: {exc}")
 
 
-def safe_list_call(label: str, api_call, warnings: List[str]):
+def _safe_list_call(label: str, api_call, warnings: List[str]):
     """
     Safely call an API that returns an iterator/list.
     

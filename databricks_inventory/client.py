@@ -14,7 +14,7 @@ from databricks.sdk import WorkspaceClient
 logger = logging.getLogger(__name__)
 
 
-def load_env(env_path: Path) -> Dict[str, str]:
+def _load_env(env_path: Path) -> Dict[str, str]:
     """Load environment variables from .env file.
     
     Args:
@@ -44,12 +44,12 @@ def load_output_dir(root: Path) -> str:
     Returns:
         Output directory path (defaults to 'output' if not configured)
     """
-    env = load_env(root / ".env")
+    env = _load_env(root / ".env")
     out_dir = env.get("OUTPUT_DIR") or os.getenv("OUTPUT_DIR", "")
     return out_dir.strip() if out_dir else "output"
 
 
-def detect_auth_method(env: Dict[str, str]) -> Tuple[str, str]:
+def _detect_auth_method(env: Dict[str, str]) -> Tuple[str, str]:
     """Detect which authentication method is configured.
     
     Args:
@@ -99,7 +99,7 @@ def build_workspace_client(root: Path) -> WorkspaceClient:
     Raises:
         RuntimeError: If required credentials are missing
     """
-    env = load_env(root / ".env")
+    env = _load_env(root / ".env")
     
     # Get host (required for all auth methods)
     host = env.get("DATABRICKS_HOST") or os.getenv("DATABRICKS_HOST", "")
@@ -134,7 +134,7 @@ def build_workspace_client(root: Path) -> WorkspaceClient:
         os.environ["DATABRICKS_TOKEN"] = token
     
     # Detect authentication method
-    auth_type, auth_desc = detect_auth_method(env)
+    auth_type, auth_desc = _detect_auth_method(env)
     logger.info("Detected authentication method: %s", auth_desc)
     
     # Try authentication in order of priority

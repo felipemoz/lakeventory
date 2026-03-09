@@ -69,7 +69,7 @@ def analyze_cloud_lockin(text: str) -> Dict:
     }
 
 
-def format_lockin_details(analysis: Dict) -> str:
+def _format_lockin_details(analysis: Dict) -> str:
     """Format lock-in analysis into compact string for inventory columns."""
     if not analysis or analysis.get("total", 0) == 0:
         return ""

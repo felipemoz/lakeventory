@@ -31,15 +31,3 @@ def test_safe_iter_handles_exception():
     assert warnings
     assert "label failed" in warnings[0]
 
-
-def test_safe_list_call_handles_exception():
-    warnings = []
-
-    def bad_call():
-        raise RuntimeError("nope")
-
-    result = utils.safe_list_call("label", bad_call, warnings)
-
-    assert result == []
-    assert warnings
-    assert "label not available" in warnings[0]

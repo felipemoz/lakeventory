@@ -6,9 +6,9 @@ from typing import List, Tuple
 
 from databricks.sdk import WorkspaceClient
 
-from .lockin import analyze_cloud_lockin, format_lockin_details
+from .lockin import analyze_cloud_lockin, _format_lockin_details
 from .models import Finding
-from .utils import safe_iter, safe_list_call
+from .utils import safe_iter, _safe_list_call
 
 
 def _read_notebook_source(client: WorkspaceClient, notebook_path: str, warnings: List[str]) -> str:
@@ -44,7 +44,7 @@ def collect_workspace_objects(
         current = stack.pop()
         for obj in safe_iter(
             "workspace.list",
-            safe_list_call("workspace.list", lambda p=current: client.workspace.list(path=p), warnings),
+            _safe_list_call("workspace.list", lambda p=current: client.workspace.list(path=p), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -66,7 +66,7 @@ def collect_workspace_objects(
                             kind,
                             f"language: {lang}",
                             lockin_count=analysis.get("total", 0),
-                            lockin_details=format_lockin_details(analysis),
+                            lockin_details=_format_lockin_details(analysis),
                         )
                     )
                 else:
@@ -87,7 +87,7 @@ def collect_jobs(
     
     for job in safe_iter(
         "jobs.list",
-        safe_list_call("jobs.list", lambda: client.jobs.list(), warnings),
+        _safe_list_call("jobs.list", lambda: client.jobs.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms
@@ -99,7 +99,7 @@ def collect_jobs(
     if include_runs and hasattr(client.jobs, "list_runs"):
         for run in safe_iter(
             "jobs.list_runs",
-            safe_list_call("jobs.list_runs", lambda: client.jobs.list_runs(), warnings),
+            _safe_list_call("jobs.list_runs", lambda: client.jobs.list_runs(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms
@@ -125,7 +125,7 @@ def collect_clusters(
     # Clusters
     for cluster in safe_iter(
         "clusters.list",
-        safe_list_call("clusters.list", lambda: client.clusters.list(), warnings),
+        _safe_list_call("clusters.list", lambda: client.clusters.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms
@@ -137,7 +137,7 @@ def collect_clusters(
     # Cluster policies
     for policy in safe_iter(
         "cluster_policies.list",
-        safe_list_call("cluster_policies.list", lambda: client.cluster_policies.list(), warnings),
+        _safe_list_call("cluster_policies.list", lambda: client.cluster_policies.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -150,7 +150,7 @@ def collect_clusters(
     if hasattr(client, "global_init_scripts"):
         for script in safe_iter(
             "global_init_scripts.list",
-            safe_list_call("global_init_scripts.list", lambda: client.global_init_scripts.list(), warnings),
+            _safe_list_call("global_init_scripts.list", lambda: client.global_init_scripts.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -163,7 +163,7 @@ def collect_clusters(
     if cloud_provider == "AWS" and hasattr(client, "instance_profiles"):
         for prof in safe_iter(
             "instance_profiles.list",
-            safe_list_call("instance_profiles.list", lambda: client.instance_profiles.list(), warnings),
+            _safe_list_call("instance_profiles.list", lambda: client.instance_profiles.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -176,7 +176,7 @@ def collect_clusters(
     # Instance Pools
     for pool in safe_iter(
         "instance_pools.list",
-        safe_list_call("instance_pools.list", lambda: client.instance_pools.list(), warnings),
+        _safe_list_call("instance_pools.list", lambda: client.instance_pools.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms
@@ -201,7 +201,7 @@ def collect_sql_assets(
     # SQL Warehouses
     for wh in safe_iter(
         "warehouses.list",
-        safe_list_call("warehouses.list", lambda: client.warehouses.list(), warnings),
+        _safe_list_call("warehouses.list", lambda: client.warehouses.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -215,7 +215,7 @@ def collect_sql_assets(
     # Pipelines (Delta Live Tables)
     for pipeline in safe_iter(
         "pipelines.list",
-        safe_list_call("pipelines.list", lambda: client.pipelines.list_pipelines(), warnings),
+        _safe_list_call("pipelines.list", lambda: client.pipelines.list_pipelines(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -227,7 +227,7 @@ def collect_sql_assets(
     # SQL Dashboards
     for dash in safe_iter(
         "dashboards.list",
-        safe_list_call("dashboards.list", lambda: client.dashboards.list(), warnings),
+        _safe_list_call("dashboards.list", lambda: client.dashboards.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -239,7 +239,7 @@ def collect_sql_assets(
     # Lakeview Dashboards
     for dash in safe_iter(
         "lakeview.list",
-        safe_list_call("lakeview.list", lambda: client.lakeview.list(), warnings),
+        _safe_list_call("lakeview.list", lambda: client.lakeview.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -251,7 +251,7 @@ def collect_sql_assets(
     # Queries
     for query in safe_iter(
         "queries.list",
-        safe_list_call("queries.list", lambda: client.queries.list(), warnings),
+        _safe_list_call("queries.list", lambda: client.queries.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -264,7 +264,7 @@ def collect_sql_assets(
     if include_query_history and hasattr(client, "query_history"):
         for qh in safe_iter(
             "query_history.list",
-            safe_list_call("query_history.list", lambda: client.query_history.list(), warnings),
+            _safe_list_call("query_history.list", lambda: client.query_history.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -276,7 +276,7 @@ def collect_sql_assets(
     # Alerts
     for alert in safe_iter(
         "alerts.list",
-        safe_list_call("alerts.list", lambda: client.alerts.list(), warnings),
+        _safe_list_call("alerts.list", lambda: client.alerts.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -300,7 +300,7 @@ def collect_mlflow_assets(
     # Experiments
     for exp in safe_iter(
         "experiments.list",
-        safe_list_call("experiments.list", lambda: client.experiments.list_experiments(), warnings),
+        _safe_list_call("experiments.list", lambda: client.experiments.list_experiments(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -312,7 +312,7 @@ def collect_mlflow_assets(
     # Registered Models
     for model in safe_iter(
         "registered_models.list",
-        safe_list_call("registered_models.list", lambda: client.registered_models.list(), warnings),
+        _safe_list_call("registered_models.list", lambda: client.registered_models.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -324,7 +324,7 @@ def collect_mlflow_assets(
         if hasattr(client, "model_versions") and model_name:
             for mv in safe_iter(
                 f"model_versions.list({model_name})",
-                safe_list_call(
+                _safe_list_call(
                     f"model_versions.list({model_name})",
                     lambda mn=model_name: client.model_versions.list(full_name=mn),
                     warnings
@@ -340,7 +340,7 @@ def collect_mlflow_assets(
     if hasattr(client, "feature_store"):
         for fs in safe_iter(
             "feature_store.list",
-            safe_list_call("feature_store.list", lambda: client.feature_store.list(), warnings),
+            _safe_list_call("feature_store.list", lambda: client.feature_store.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -352,7 +352,7 @@ def collect_mlflow_assets(
     if hasattr(client, "feature_engineering"):
         for fe in safe_iter(
             "feature_engineering.list",
-            safe_list_call("feature_engineering.list", lambda: client.feature_engineering.list(), warnings),
+            _safe_list_call("feature_engineering.list", lambda: client.feature_engineering.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -374,7 +374,7 @@ def collect_unity_catalog(
     
     for catalog_obj in safe_iter(
         "catalogs.list",
-        safe_list_call("catalogs.list", lambda: client.catalogs.list(), warnings),
+        _safe_list_call("catalogs.list", lambda: client.catalogs.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -385,7 +385,7 @@ def collect_unity_catalog(
         # Schemas
         for schema in safe_iter(
             f"schemas.list({catalog_name})",
-            safe_list_call(f"schemas.list({catalog_name})", lambda cn=catalog_name: client.schemas.list(catalog_name=cn), warnings),
+            _safe_list_call(f"schemas.list({catalog_name})", lambda cn=catalog_name: client.schemas.list(catalog_name=cn), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -396,7 +396,7 @@ def collect_unity_catalog(
             # Tables
             for table in safe_iter(
                 f"tables.list({catalog_name}.{schema_name})",
-                safe_list_call(
+                _safe_list_call(
                     f"tables.list({catalog_name}.{schema_name})",
                     lambda cn=catalog_name, sn=schema_name: client.tables.list(catalog_name=cn, schema_name=sn),
                     warnings
@@ -417,7 +417,7 @@ def collect_unity_catalog(
             # Volumes
             for vol in safe_iter(
                 f"volumes.list({catalog_name}.{schema_name})",
-                safe_list_call(
+                _safe_list_call(
                     f"volumes.list({catalog_name}.{schema_name})",
                     lambda cn=catalog_name, sn=schema_name: client.volumes.list(catalog_name=cn, schema_name=sn),
                     warnings
@@ -432,7 +432,7 @@ def collect_unity_catalog(
     # External Locations
     for eloc in safe_iter(
         "external_locations.list",
-        safe_list_call("external_locations.list", lambda: client.external_locations.list(), warnings),
+        _safe_list_call("external_locations.list", lambda: client.external_locations.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -444,7 +444,7 @@ def collect_unity_catalog(
     # Storage Credentials
     for cred in safe_iter(
         "storage_credentials.list",
-        safe_list_call("storage_credentials.list", lambda: client.storage_credentials.list(), warnings),
+        _safe_list_call("storage_credentials.list", lambda: client.storage_credentials.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -455,7 +455,7 @@ def collect_unity_catalog(
     # Connections
     for conn in safe_iter(
         "connections.list",
-        safe_list_call("connections.list", lambda: client.connections.list(), warnings),
+        _safe_list_call("connections.list", lambda: client.connections.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -468,7 +468,7 @@ def collect_unity_catalog(
     if hasattr(client, "metastores"):
         for ms in safe_iter(
             "metastores.list",
-            safe_list_call("metastores.list", lambda: client.metastores.list(), warnings),
+            _safe_list_call("metastores.list", lambda: client.metastores.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -492,7 +492,7 @@ def collect_repos(
     # Repos
     for repo in safe_iter(
         "repos.list",
-        safe_list_call("repos.list", lambda: client.repos.list(), warnings),
+        _safe_list_call("repos.list", lambda: client.repos.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -505,7 +505,7 @@ def collect_repos(
     if hasattr(client, "git_credentials"):
         for cred in safe_iter(
             "git_credentials.list",
-            safe_list_call("git_credentials.list", lambda: client.git_credentials.list(), warnings),
+            _safe_list_call("git_credentials.list", lambda: client.git_credentials.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -529,7 +529,7 @@ def collect_security_assets(
     # Secret Scopes
     for scope in safe_iter(
         "secrets.list_scopes",
-        safe_list_call("secrets.list_scopes", lambda: client.secrets.list_scopes(), warnings),
+        _safe_list_call("secrets.list_scopes", lambda: client.secrets.list_scopes(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -540,7 +540,7 @@ def collect_security_assets(
     # Tokens
     for token in safe_iter(
         "tokens.list",
-        safe_list_call("tokens.list", lambda: client.tokens.list(), warnings),
+        _safe_list_call("tokens.list", lambda: client.tokens.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -553,7 +553,7 @@ def collect_security_assets(
     if hasattr(client, "ip_access_lists"):
         for ip in safe_iter(
             "ip_access_lists.list",
-            safe_list_call("ip_access_lists.list", lambda: client.ip_access_lists.list(), warnings),
+            _safe_list_call("ip_access_lists.list", lambda: client.ip_access_lists.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -577,7 +577,7 @@ def collect_identities(
     # Users
     for user_obj in safe_iter(
         "users.list",
-        safe_list_call("users.list", lambda: client.users.list(), warnings),
+        _safe_list_call("users.list", lambda: client.users.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms
@@ -589,7 +589,7 @@ def collect_identities(
     # Groups
     for group in safe_iter(
         "groups.list",
-        safe_list_call("groups.list", lambda: client.groups.list(), warnings),
+        _safe_list_call("groups.list", lambda: client.groups.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms
@@ -601,7 +601,7 @@ def collect_identities(
     # Service Principals
     for sp in safe_iter(
         "service_principals.list",
-        safe_list_call("service_principals.list", lambda: client.service_principals.list(), warnings),
+        _safe_list_call("service_principals.list", lambda: client.service_principals.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -625,7 +625,7 @@ def collect_serving_assets(
     # Serving Endpoints
     for endpoint in safe_iter(
         "serving_endpoints.list",
-        safe_list_call("serving_endpoints.list", lambda: client.serving_endpoints.list(), warnings),
+        _safe_list_call("serving_endpoints.list", lambda: client.serving_endpoints.list(), warnings),
         warnings,
         batch_size,
         batch_sleep_ms,
@@ -637,7 +637,7 @@ def collect_serving_assets(
     if hasattr(client, "vector_search_endpoints"):
         for vse in safe_iter(
             "vector_search_endpoints.list",
-            safe_list_call("vector_search_endpoints.list", lambda: client.vector_search_endpoints.list(), warnings),
+            _safe_list_call("vector_search_endpoints.list", lambda: client.vector_search_endpoints.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -649,7 +649,7 @@ def collect_serving_assets(
     if hasattr(client, "vector_search_indexes"):
         for vsi in safe_iter(
             "vector_search_indexes.list",
-            safe_list_call("vector_search_indexes.list", lambda: client.vector_search_indexes.list(), warnings),
+            _safe_list_call("vector_search_indexes.list", lambda: client.vector_search_indexes.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -661,7 +661,7 @@ def collect_serving_assets(
     if hasattr(client, "online_tables"):
         for ot in safe_iter(
             "online_tables.list",
-            safe_list_call("online_tables.list", lambda: client.online_tables.list(), warnings),
+            _safe_list_call("online_tables.list", lambda: client.online_tables.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -685,7 +685,7 @@ def collect_sharing(
     if hasattr(client, "shares"):
         for share in safe_iter(
             "shares.list",
-            safe_list_call("shares.list", lambda: client.shares.list(), warnings),
+            _safe_list_call("shares.list", lambda: client.shares.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -697,7 +697,7 @@ def collect_sharing(
     if hasattr(client, "recipients"):
         for rec in safe_iter(
             "recipients.list",
-            safe_list_call("recipients.list", lambda: client.recipients.list(), warnings),
+            _safe_list_call("recipients.list", lambda: client.recipients.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -709,7 +709,7 @@ def collect_sharing(
     if hasattr(client, "providers"):
         for prov in safe_iter(
             "providers.list",
-            safe_list_call("providers.list", lambda: client.providers.list(), warnings),
+            _safe_list_call("providers.list", lambda: client.providers.list(), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -732,7 +732,7 @@ def collect_dbfs(
     if hasattr(client, "dbfs"):
         for file_info in safe_iter(
             "dbfs.list",
-            safe_list_call("dbfs.list", lambda: client.dbfs.list(path="/"), warnings),
+            _safe_list_call("dbfs.list", lambda: client.dbfs.list(path="/"), warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
