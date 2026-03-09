@@ -32,6 +32,20 @@ def load_env(env_path: Path) -> Dict[str, str]:
     return env
 
 
+def load_output_dir(root: Path) -> str:
+    """Load output directory from environment configuration.
+    
+    Args:
+        root: Root directory containing .env file
+        
+    Returns:
+        Output directory path (defaults to 'output' if not configured)
+    """
+    env = load_env(root / ".env")
+    out_dir = env.get("OUTPUT_DIR") or os.getenv("OUTPUT_DIR", "")
+    return out_dir.strip() if out_dir else "output"
+
+
 def build_workspace_client(root: Path) -> WorkspaceClient:
     """Build WorkspaceClient from environment configuration.
     

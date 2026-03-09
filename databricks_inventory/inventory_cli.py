@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from databricks_inventory.cache import InventoryCache
-from databricks_inventory.client import build_workspace_client
+from databricks_inventory.client import build_workspace_client, load_output_dir
 from databricks_inventory.collectors import collect_all_findings, collect_findings_selective
 from databricks_inventory.logging_config import configure_logging
 from databricks_inventory.output import (
@@ -54,8 +54,8 @@ def main() -> int:
     parser.add_argument("--root", default=".", help="Workspace root to scan")
     parser.add_argument(
         "--out-dir",
-        default="output",
-        help="Directory where output files will be written",
+        default="",
+        help="Directory where output files will be written (empty = use OUTPUT_DIR from .env or default to ./output)",
     )
     parser.add_argument("--out", default="workspace_id.md", help="Output markdown file")
     parser.add_argument("--out-xlsx", default="", help="Output Excel file with categorized sheets")
@@ -134,8 +134,16 @@ def main() -> int:
     logger.debug("Parsed CLI args: %s", args)
 
     root = Path(args.root).resolve()
-    out_dir = (root / args.out_dir).resolve()
+    
+    # Determine output directory: CLI arg > .env config > default
+    if args.out_dir:
+        output_dir_str = args.out_dir
+    else:
+        output_dir_str = load_output_dir(root)
+    
+    out_dir = (root / output_dir_str).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    logger.debug("Output directory: %s", out_dir)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
 
     def with_timestamp(path: Path) -> Path:

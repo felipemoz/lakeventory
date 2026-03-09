@@ -391,6 +391,28 @@ python -m databricks_inventory \
   --out-xlsx report.xlsx
 ```
 
+### Output Directory (Alternative: Environment Variable)
+
+Instead of using `--out-dir` every time, you can configure it in `.env`:
+```
+# .env
+OUTPUT_DIR=./my-reports
+```
+
+The output directory is resolved in this order of priority:
+1. **CLI argument** (`--out-dir`) - highest priority
+2. **Environment variable** (`OUTPUT_DIR` in `.env` or OS env)
+3. **Default** (`./output`) - fallback if neither above is set
+
+Example:
+```bash
+# Uses OUTPUT_DIR from .env (or defaults to ./output)
+make inventory
+
+# Override via CLI (takes precedence over .env)
+python -m databricks_inventory --out-dir /tmp/reports --source sdk
+```
+
 ## Heavy Collectors (Optional)
 ```bash
 python -m databricks_inventory \

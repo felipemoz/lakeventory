@@ -79,3 +79,49 @@ def test_build_workspace_client_missing_host(tmp_path: Path, monkeypatch):
         assert False, "Expected RuntimeError"
     except RuntimeError as exc:
         assert "Missing DATABRICKS_HOST" in str(exc)
+
+
+def test_load_output_dir_from_env(tmp_path: Path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text("OUTPUT_DIR=/custom/output")
+    
+    monkeypatch.delenv("OUTPUT_DIR", raising=False)
+    
+    result = client.load_output_dir(tmp_path)
+    
+    assert result == "/custom/output"
+
+
+def test_load_output_dir_from_os_env(tmp_path: Path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text("")
+    
+    monkeypatch.setenv("OUTPUT_DIR", "/os/output")
+    
+    result = client.load_output_dir(tmp_path)
+    
+    assert result == "/os/output"
+
+
+def test_load_output_dir_defaults_to_output(tmp_path: Path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text("")
+    
+    monkeypatch.delenv("OUTPUT_DIR", raising=False)
+    
+    result = client.load_output_dir(tmp_path)
+    
+    assert result == "output"
+
+
+def test_load_output_dir_priority(tmp_path: Path, monkeypatch):
+    """Test that .env OUTPUT_DIR takes priority over OS env."""
+    env_path = tmp_path / ".env"
+    env_path.write_text("OUTPUT_DIR=/env/output")
+    
+    monkeypatch.setenv("OUTPUT_DIR", "/os/output")
+    
+    result = client.load_output_dir(tmp_path)
+    
+    assert result == "/env/output"
+
