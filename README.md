@@ -172,7 +172,7 @@ databricks_inventory/
 ## Testing
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 pytest -q
 ```
 

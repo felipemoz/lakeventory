@@ -4,10 +4,14 @@ Handles storing and comparing inventory snapshots to detect changes.
 """
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from .models import Finding
+
+
+logger = logging.getLogger(__name__)
 
 
 class InventoryCache:
@@ -150,8 +154,8 @@ class InventoryCache:
                         "timestamp": data.get("timestamp"),
                         "count": data.get("count"),
                     })
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to read cache snapshot %s: %s", f.name, exc)
         
         return {
             "cache_dir": str(self.cache_dir),

@@ -56,6 +56,7 @@ install:
 
 install-dev:
 	pip3 install -r requirements.txt
+	pip3 install pip-audit
 
 test:
 	$(PYTHON) -m pytest -q
