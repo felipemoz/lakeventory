@@ -18,6 +18,7 @@ from databricks_inventory.output import (
     write_excel,
     write_markdown,
 )
+from databricks_inventory.permissions_validator import PermissionsValidator
 
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,16 @@ def main() -> int:
         choices=["error", "info", "verbose", "debug"],
         help="Logging verbosity level (error, info/verbose, debug)",
     )
+    parser.add_argument(
+        "--validate-permissions",
+        action="store_true",
+        help="Validate that user has required permissions before running inventory",
+    )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip permission validation (not recommended)",
+    )
     args = parser.parse_args()
 
     configure_logging(args.log_level)
@@ -140,6 +151,21 @@ def main() -> int:
     # Build client and collect findings
     logger.info("Connecting to Databricks workspace...")
     client = build_workspace_client(root)
+
+    # Validate permissions (always run unless explicitly skipped)
+    if not args.skip_validation:
+        logger.info("Validating user permissions...")
+        validator = PermissionsValidator(client)
+        all_passed, results, warnings_perms = validator.validate_all(exclude_heavy=not args.include_dbfs)
+        print(validator.format_report())
+        
+        if not all_passed and args.validate_permissions:
+            logger.error("Permission validation failed. Please check the report above.")
+            return 1
+        elif not all_passed:
+            logger.warning("Some permissions are missing. Inventory may be incomplete. Use --validate-permissions to fail on errors.")
+    else:
+        logger.debug("Permission validation skipped (--skip-validation)")
 
     logger.info("Collecting inventory...")
     if args.serverless and not args.collectors:

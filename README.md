@@ -177,6 +177,35 @@ Each collector accesses specific Databricks APIs:
 
 When `DATABRICKS_CLOUD_PROVIDER` is set correctly, the script automatically skips cloud-specific non-applicable APIs.
 
+## Validate Permissions (Before Running)
+
+Before running the full inventory, you can validate that your user has the required permissions:
+
+```bash
+python -m databricks_inventory --validate-permissions --source sdk
+```
+
+This will:
+- Connect to the Databricks workspace
+- Test access to each API endpoint (workspace, jobs, clusters, SQL, MLflow, UC, etc.)
+- Print a detailed permission validation report
+- **Fail with exit code 1 if any permissions are missing**
+
+### Important Notes
+
+- **Permission validation runs automatically by default** (unless `--skip-validation` is used)
+- If permissions are missing, inventory will still run but may have incomplete results
+- Use `--validate-permissions` to make it **fail on any permission errors** (recommended for CI/CD)
+- Use `--skip-validation` to skip validation (not recommended)
+
+Example with validation failure:
+```bash
+python -m databricks_inventory \
+  --source sdk \
+  --out report.md \
+  --validate-permissions  # Will fail exit code 1 if permissions missing
+```
+
 ## Run (Direct)
 ```bash
 python -m databricks_inventory \
