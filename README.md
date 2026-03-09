@@ -69,19 +69,75 @@ This modular structure enables:
 - **Clarity**: Clear separation between configuration, business logic, and output
 
 ## Configure Credentials
-Use `.env` (or environment variables). You can start from `.env-example`:
-```
+
+The tool supports **3 authentication methods** (in order of priority):
+
+### 1️⃣ Service Principal (Recommended for Production/CI-CD)
+
+Best for automation, CI/CD pipelines, and scheduled jobs.
+
+**Create a Service Principal:**
+1. Go to Databricks Admin Console → Identity & Access → Service Principals
+2. Click "Add Service Principal" and create with name (e.g., "inventory-reader")
+3. Assign required permissions (read-only access to workspace APIs)
+4. Create a PAT (Personal Access Token) for the Service Principal
+
+**Configure in `.env`:**
+```env
 DATABRICKS_HOST=https://<workspace-host>
-
-# Cloud Provider: AWS, AZURE, or GCP
-# This helps skip APIs that are not available in specific clouds
-DATABRICKS_CLOUD_PROVIDER=AZURE
-
-DATABRICKS_USERNAME=<admin-user>
-DATABRICKS_PASSWORD=<admin-password>
-# or
-DATABRICKS_TOKEN=<pat>
+DATABRICKS_CLIENT_ID=<service-principal-id>
+DATABRICKS_CLIENT_SECRET=<service-principal-secret>
 ```
+
+**Advantages:**
+- ✅ Secure for production and CI/CD (no personal credentials)
+- ✅ Easily rotatable (create new, deprecate old)
+- ✅ Full auditability (logs show which SP did what)
+- ✅ Can restrict permissions per SP
+
+### 2️⃣ PAT Token (for Development/Testing)
+
+Personal Access Token from your Databricks account.
+
+**Create a PAT:**
+1. In Databricks, click your profile → User Settings → Access tokens
+2. Click "Generate new token" → Copy the token
+
+**Configure in `.env`:**
+```env
+DATABRICKS_HOST=https://<workspace-host>
+DATABRICKS_TOKEN=<your-pat-token>
+```
+
+**Advantages:**
+- ✅ Easy to set up for development
+- ✅ Tied to your user account
+- ✅ Customizable expiration (7 days to 90 years)
+
+### 3️⃣ Username + Password (Basic Auth)
+
+Use your Databricks username and password.
+
+**Configure in `.env`:**
+```env
+DATABRICKS_HOST=https://<workspace-host>
+DATABRICKS_USERNAME=<your-username>
+DATABRICKS_PASSWORD=<your-password>
+```
+
+⚠️ **Not recommended** for production or CI/CD. Use Service Principal instead.
+
+### Priority & Automatic Detection
+
+The tool **automatically detects** which authentication method is configured:
+
+```
+1. Service Principal (DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET) ← Highest Priority
+2. PAT Token (DATABRICKS_TOKEN)
+3. Basic Auth (DATABRICKS_USERNAME + DATABRICKS_PASSWORD) ← Lowest Priority
+```
+
+The first one found will be used. If multiple are configured, only the highest priority will be used.
 
 ## Health Check (Before Starting)
 
@@ -95,7 +151,7 @@ This performs 4 verification steps:
 
 1. **Python Version**: Checks that Python 3.8+ is installed
 2. **Dependencies**: Verifies `databricks-sdk`, `openpyxl`, and `tqdm` are installed
-3. **Credentials**: Validates `DATABRICKS_HOST` and authentication (token or username/password)
+3. **Credentials**: Validates `DATABRICKS_HOST` and authentication (detects auth method automatically)
 4. **Workspace Connection**: Connects to the workspace and verifies access
 
 ### Example Successful Check
@@ -141,6 +197,83 @@ If any check fails, the script will exit with an error message describing what n
 - `AWS`: Enables Instance Profiles API
 - `AZURE`: Skips Instance Profiles (Azure uses Managed Identities)
 - `GCP`: Skips Instance Profiles (GCP uses Service Accounts)
+
+## Service Principal Setup (Recommended for CI/CD)
+
+### Create and Configure Service Principal
+
+**Step 1: Create Service Principal in Databricks Admin Console**
+```
+1. Navigate to Admin Console → Identity & Access → Service Principals
+2. Click "Add Service Principal"
+3. Enter name: "inventory-reader" (or your preferred name)
+4. Note the Client ID (e.g., a1b2c3d4-e5f6-7890-1234-567890abcdef)
+```
+
+**Step 2: Assign Permissions**
+```
+Option A - Create a Databricks group and assign to it:
+1. Admin Console → Groups → Add Group "inventory-viewers"
+2. Go to Service Principals → "inventory-reader" → Edit
+3. Add to group "inventory-viewers"
+4. Assign read permissions to the group
+
+Option B - Use Terraform (recommended for production):
+1. Define resource "databricks_service_principal" in code
+2. Assign permissions via "databricks_permissions" or role binding
+```
+
+**Step 3: Create PAT Token for Service Principal**
+```bash
+# Via Databricks CLI
+databricks pat create \
+  --service-principal-id a1b2c3d4-e5f6-7890-1234-567890abcdef \
+  --lifetime 365  # Token valid for 1 year
+  --comment "inventory-reader token"
+```
+Output: `dapd1234567890abcdefghijklmnopqrst` (save this securely!)
+
+**Step 4: Configure in Your CI/CD Pipeline**
+
+For **GitHub Actions**:
+```yaml
+name: Run Databricks Inventory
+on: [push]
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Inventory
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.SP_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.SP_CLIENT_SECRET }}
+        run: python -m databricks_inventory --source sdk
+```
+
+For **Jenkins or GitLab CI**:
+```bash
+export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
+export DATABRICKS_CLIENT_ID="a1b2c3d4-e5f6-7890-1234-567890abcdef"
+export DATABRICKS_CLIENT_SECRET="<secret-from-secure-storage>"
+python -m databricks_inventory --source sdk
+```
+
+### Verify Service Principal Access
+
+**Check which authentication method is detected:**
+```bash
+python -m databricks_inventory --log-level debug --root . 2>&1 | grep "authentication method"
+# Output: INFO Detected authentication method: Service Principal (Client ID: a1b2c3d4...)
+```
+
+**Run health check with Service Principal:**
+```bash
+make check
+# Will show: ✅ DATABRICKS_CLIENT_ID: configured
+```
 
 ## Required Permissions
 
