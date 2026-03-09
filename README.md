@@ -83,6 +83,60 @@ DATABRICKS_PASSWORD=<admin-password>
 DATABRICKS_TOKEN=<pat>
 ```
 
+## Health Check (Before Starting)
+
+Before running inventory, verify that everything is properly configured:
+
+```bash
+make check
+```
+
+This performs 4 verification steps:
+
+1. **Python Version**: Checks that Python 3.8+ is installed
+2. **Dependencies**: Verifies `databricks-sdk`, `openpyxl`, and `tqdm` are installed
+3. **Credentials**: Validates `DATABRICKS_HOST` and authentication (token or username/password)
+4. **Workspace Connection**: Connects to the workspace and verifies access
+
+### Example Successful Check
+
+```
+======================================================================
+INVENTORY TOOL HEALTH CHECK
+======================================================================
+
+[1/4] Python Version
+  Python 3.9.6
+  ✅ PASS (Python 3.8+)
+
+[2/4] Dependencies
+  ✅ databricks-sdk
+  ✅ openpyxl
+  ✅ tqdm
+
+[3/4] Databricks Credentials
+  ✅ DATABRICKS_HOST: https://dbc-abc123.cloud.databricks.com
+  ✅ DATABRICKS_TOKEN: configured
+  ✅ Cloud Provider: AZURE
+
+[4/4] Workspace Connection
+  Connecting to workspace...
+  ✅ Connected to workspace ID: 1234567890
+  ✅ Can list workspace objects
+
+======================================================================
+✅ ALL CHECKS PASSED - READY TO RUN INVENTORY
+======================================================================
+
+Next steps:
+  1. Run: make inventory-validate
+     (to validate API permissions)
+  2. Run: make inventory
+     (to generate workspace inventory)
+```
+
+If any check fails, the script will exit with an error message describing what needs to be fixed.
+
 **Note:** Setting `DATABRICKS_CLOUD_PROVIDER` helps the script skip cloud-specific APIs:
 - `AWS`: Enables Instance Profiles API
 - `AZURE`: Skips Instance Profiles (Azure uses Managed Identities)

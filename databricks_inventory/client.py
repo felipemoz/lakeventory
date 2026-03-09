@@ -65,10 +65,11 @@ def build_workspace_client(root: Path) -> WorkspaceClient:
     if not host:
         raise RuntimeError("Missing DATABRICKS_HOST. Set it in .env or environment.")
 
+    # Token takes priority over basic auth to avoid credential conflicts
+    if token:
+        return WorkspaceClient(host=host, token=token)
     if host and (user and password):
         return WorkspaceClient(host=host, username=user, password=password)
-    if host and token:
-        return WorkspaceClient(host=host, token=token)
     raise RuntimeError(
         "Missing Databricks credentials. Set DATABRICKS_USERNAME and DATABRICKS_PASSWORD or DATABRICKS_TOKEN."
     )

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test \
+.PHONY: help install install-dev test check \
 	inventory inventory-basic inventory-batch inventory-serverless inventory-no-progress \
 	inventory-debug inventory-error inventory-verbose \
 	inventory-selective inventory-full inventory-incremental \
@@ -19,6 +19,7 @@ LOG_LEVEL ?= info
 
 help:
 	@echo "Available targets:"
+	@echo "  make check                  # health check (dependencies, auth, workspace)"
 	@echo "  make inventory              # default run (respects BATCH_SIZE/BATCH_SLEEP_MS/SERVERLESS)"
 	@echo "  make inventory-basic        # basic run with default options"
 	@echo "  make inventory-batch        # run with explicit batching"
@@ -42,6 +43,11 @@ install-dev:
 
 test:
 	$(PYTHON) -m pytest -q
+
+check:
+	@echo "🔍 Running health check..."
+	@echo ""
+	$(PYTHON) -m databricks_inventory.health_check
 
 inventory:
 	$(PYTHON) -m databricks_inventory \

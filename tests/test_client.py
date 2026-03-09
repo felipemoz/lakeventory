@@ -55,6 +55,7 @@ DATABRICKS_PASSWORD=pass
     monkeypatch.delenv("DATABRICKS_HOST", raising=False)
     monkeypatch.delenv("DATABRICKS_USERNAME", raising=False)
     monkeypatch.delenv("DATABRICKS_PASSWORD", raising=False)
+    monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
 
     wc = client.build_workspace_client(tmp_path)
 
@@ -64,9 +65,14 @@ DATABRICKS_PASSWORD=pass
     assert wc.kwargs["password"] == "pass"
 
 
-def test_build_workspace_client_missing_host(tmp_path: Path):
+def test_build_workspace_client_missing_host(tmp_path: Path, monkeypatch):
     env_path = tmp_path / ".env"
     env_path.write_text("DATABRICKS_TOKEN=abc123")
+
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+    monkeypatch.delenv("DATABRICKS_USERNAME", raising=False)
+    monkeypatch.delenv("DATABRICKS_PASSWORD", raising=False)
+    monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
 
     try:
         client.build_workspace_client(tmp_path)
