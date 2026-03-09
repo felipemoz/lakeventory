@@ -191,6 +191,62 @@ This will:
 - Print a detailed permission validation report
 - **Fail with exit code 1 if any permissions are missing**
 
+### Example Permission Report
+
+```
+======================================================================
+PERMISSION VALIDATION REPORT
+======================================================================
+
+✅ PASSED: 11/11 permission checks
+
+Core APIs (Required):
+  ✅ Workspace
+  ✅ Jobs
+  ✅ Clusters
+  ✅ Sql
+  ✅ Mlflow
+  ✅ Unity Catalog
+  ✅ Repos
+  ✅ Security
+  ✅ Identities
+  ✅ Serving
+  ✅ Sharing
+
+======================================================================
+```
+
+### Example with Missing Permissions
+
+```
+======================================================================
+PERMISSION VALIDATION REPORT
+======================================================================
+
+✅ PASSED: 9/11 permission checks
+
+Core APIs (Required):
+  ✅ Workspace
+  ✅ Jobs
+  ❌ Clusters
+  ✅ Sql
+  ✅ Mlflow
+  ❌ Unity Catalog
+  ✅ Repos
+  ✅ Security
+  ✅ Identities
+  ✅ Serving
+  ✅ Sharing
+
+----------------------------------------------------------------------
+PERMISSION ERRORS:
+
+  ⚠️  clusters.list: 403 Forbidden - User does not have permission to access clusters
+  ⚠️  catalogs.list: 403 Forbidden - User does not have permission to list UC catalogs
+
+======================================================================
+```
+
 ### Important Notes
 
 - **Permission validation runs automatically by default** (unless `--skip-validation` is used)
@@ -204,6 +260,19 @@ python -m databricks_inventory \
   --source sdk \
   --out report.md \
   --validate-permissions  # Will fail exit code 1 if permissions missing
+```
+
+### Makefile Targets for Validation
+
+```bash
+# Validate permissions and exit on error
+make inventory-validate
+
+# Run full inventory (with automatic permission validation)
+make inventory
+
+# Skip validation (not recommended)
+make inventory SKIP_VALIDATION=1
 ```
 
 ## Run (Direct)

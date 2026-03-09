@@ -2,6 +2,7 @@
 	inventory inventory-basic inventory-batch inventory-serverless inventory-no-progress \
 	inventory-debug inventory-error inventory-verbose \
 	inventory-selective inventory-full inventory-incremental \
+	inventory-validate \
 	cache-clear cache-info
 
 PYTHON ?= python3
@@ -24,6 +25,7 @@ help:
 	@echo "  make inventory-serverless   # run serverless mode"
 	@echo "  make inventory-incremental  # delta mode using cache snapshots"
 	@echo "  make inventory-no-progress  # run with progress bars disabled"
+	@echo "  make inventory-validate     # validate permissions only (fail on errors)"
 	@echo "  make inventory-debug        # run with debug logs"
 	@echo "  make inventory-error        # show only errors"
 	@echo "  make inventory-verbose      # info/verbose logs"
@@ -56,6 +58,12 @@ inventory-basic:
 		--out $(OUT) \
 		--log-level $(LOG_LEVEL) \
 		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),)
+
+inventory-validate:
+	$(PYTHON) -m databricks_inventory \
+		--source sdk \
+		--validate-permissions \
+		--log-level $(LOG_LEVEL)
 
 inventory-batch:
 	$(PYTHON) -m databricks_inventory \
