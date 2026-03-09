@@ -1,6 +1,7 @@
 """Command-line interface for Databricks inventory."""
 
 import argparse
+import logging
 import os
 import re
 from datetime import datetime
@@ -10,12 +11,16 @@ from urllib.parse import urlparse
 from databricks_inventory.cache import InventoryCache
 from databricks_inventory.client import build_workspace_client
 from databricks_inventory.collectors import collect_all_findings, collect_findings_selective
+from databricks_inventory.logging_config import configure_logging
 from databricks_inventory.output import (
     write_delta_excel,
     write_delta_markdown,
     write_excel,
     write_markdown,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def extract_workspace_id(host: str) -> str:
@@ -106,7 +111,16 @@ def main() -> int:
         default=".inventory_cache",
         help="Directory to store cache/snapshots (default: .inventory_cache)",
     )
+    parser.add_argument(
+        "--log-level",
+        default=os.getenv("INVENTORY_LOG_LEVEL", "info"),
+        choices=["error", "info", "verbose", "debug"],
+        help="Logging verbosity level (error, info/verbose, debug)",
+    )
     args = parser.parse_args()
+
+    configure_logging(args.log_level)
+    logger.debug("Parsed CLI args: %s", args)
 
     root = Path(args.root).resolve()
     out_dir = (root / args.out_dir).resolve()
@@ -119,15 +133,15 @@ def main() -> int:
         return path.with_name(f"{path.name}_{timestamp}")
 
     workspace_id = extract_workspace_id(os.getenv("DATABRICKS_HOST", ""))
-    print(f"Using workspace_id: {workspace_id}")
+    logger.info("Using workspace_id: %s", workspace_id)
     if args.serverless:
-        print("⚡ Running in serverless mode (cluster collectors skipped)")
+        logger.info("Running in serverless mode (cluster collectors skipped)")
 
     # Build client and collect findings
-    print("Connecting to Databricks workspace...")
+    logger.info("Connecting to Databricks workspace...")
     client = build_workspace_client(root)
 
-    print("Collecting inventory...")
+    logger.info("Collecting inventory...")
     if args.serverless and not args.collectors:
         # In serverless mode, skip cluster-related collectors by default
         collectors_list = "workspace,jobs,sql,mlflow,unity_catalog,repos,security,identities,serving,sharing,dbfs"
@@ -163,44 +177,53 @@ def main() -> int:
 
     # Handle incremental mode
     if args.incremental:
-        print(f"Incremental mode: loading cache from {args.cache_dir}")
+        logger.info("Incremental mode: loading cache from %s", args.cache_dir)
         cache = InventoryCache(Path(args.cache_dir))
         previous = cache.get_latest_snapshot()
         delta_findings, stats = cache.compute_delta(findings, previous)
         
-        print(f"Changes: +{stats['added']} | -{stats['removed']} | ~{stats['modified']} | ✓{stats['unchanged']}")
+        logger.info(
+            "Changes: +%s | -%s | ~%s | ✓%s",
+            stats["added"],
+            stats["removed"],
+            stats["modified"],
+            stats["unchanged"],
+        )
         
-        print("Writing delta markdown report...")
+        logger.info("Writing delta markdown report...")
         write_delta_markdown(delta_findings, stats, warnings, out_path)
         
         if args.out_xlsx:
             xlsx_name = apply_workspace_id(Path(args.out_xlsx).name, workspace_id)
             xlsx_path = out_dir / with_timestamp(Path(xlsx_name))
-            print("Writing delta Excel report...")
+            logger.info("Writing delta Excel report...")
             write_delta_excel(delta_findings, stats, warnings, xlsx_path)
         
         # Save current snapshot for next run
         cache.save_snapshot(findings)
-        print(f"✓ Wrote delta report ({len(delta_findings)} changes) to {out_path}")
+        logger.info("Wrote delta report (%s changes) to %s", len(delta_findings), out_path)
     else:
         # Full mode (not incremental)
-        print("Writing markdown report...")
+        logger.info("Writing markdown report...")
         write_markdown(findings, warnings, out_path)
 
         if args.out_xlsx:
             xlsx_name = apply_workspace_id(Path(args.out_xlsx).name, workspace_id)
             xlsx_path = out_dir / with_timestamp(Path(xlsx_name))
-            print("Writing Excel report...")
+            logger.info("Writing Excel report...")
             write_excel(findings, warnings, xlsx_path)
 
-        print(f"✓ Wrote {len(findings)} findings to {out_path}")
+        logger.info("Wrote %s findings to %s", len(findings), out_path)
         
         # Save snapshot if cache enabled
         if args.cache_dir:
             cache = InventoryCache(Path(args.cache_dir))
             cache.save_snapshot(findings)
-            print(f"✓ Snapshot saved to {args.cache_dir}")
+            logger.debug("Snapshot saved to %s", args.cache_dir)
     if warnings:
-        print(f"⚠ {len(warnings)} warnings (see output for details)")
+        logger.error("%s warnings captured (see output for details)", len(warnings))
+        if logger.isEnabledFor(logging.DEBUG):
+            for warning in warnings:
+                logger.debug("warning: %s", warning)
 
     return 0

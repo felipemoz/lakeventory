@@ -104,6 +104,26 @@ python -m databricks_inventory \
   --batch-sleep-ms 300
 ```
 
+## Progress Bars
+By default, collector iterations show progress bars in terminal output (via `tqdm`).
+
+Disable progress bars when running in CI or non-interactive environments:
+```bash
+INVENTORY_PROGRESS=0 python -m databricks_inventory --source sdk --out report.md
+```
+
+## Logging Levels
+You can control verbosity with `--log-level`:
+- `error`: only errors
+- `info` or `verbose`: standard run logs
+- `debug`: detailed diagnostics (includes warning details)
+
+Examples:
+```bash
+python -m databricks_inventory --source sdk --out report.md --log-level error
+python -m databricks_inventory --source sdk --out report.md --log-level debug
+```
+
 ## Excel Output
 ```bash
 python -m databricks_inventory \
@@ -192,6 +212,14 @@ Serverless workspace:
 ```bash
 make inventory SERVERLESS=1
 make inventory-full SERVERLESS=1
+```
+
+Logging via Makefile:
+```bash
+make inventory LOG_LEVEL=debug
+make inventory-debug
+make inventory-error
+make inventory-verbose
 ```
 
 ## Tests
