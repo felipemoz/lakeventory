@@ -30,7 +30,9 @@ def summarize(findings: List[Finding], warnings: List[str]) -> Tuple[str, List[s
 
     detail_lines = ["## Findings", ""]
     for f in sorted(findings, key=lambda x: (x.kind, x.path)):
-        detail_lines.append(f"- [{f.kind}] {f.path} ({f.notes})")
+        detail_lines.append(
+            f"- [{f.kind}] {f.path} ({f.notes}) | lockin_count={f.lockin_count} | lockin_details={f.lockin_details or '-'}"
+        )
 
     if warnings:
         detail_lines.append("")
@@ -78,13 +80,13 @@ def write_excel(findings: List[Finding], warnings: List[str], out_path: Path) ->
     sheets = {}
     for sheet_name in SHEET_ORDER:
         ws = wb.create_sheet(title=sheet_name)
-        ws.append(["kind", "path", "notes"])
+        ws.append(["kind", "path", "notes", "lockin_count", "lockin_details"])
         sheets[sheet_name] = ws
 
     # Populate sheets with findings
     for item in findings:
         sheet_name = KIND_TO_SHEET.get(item.kind, "Workspace Objects")
-        sheets[sheet_name].append([item.kind, item.path, item.notes])
+        sheets[sheet_name].append([item.kind, item.path, item.notes, item.lockin_count, item.lockin_details])
 
     # Add warnings sheet if needed
     if warnings:
@@ -123,7 +125,9 @@ def write_delta_markdown(
         lines.append("## Changed Items")
         lines.append("")
         for f in sorted(delta_findings, key=lambda x: (x.kind, x.path)):
-            lines.append(f"- [{f.kind}] {f.path} ({f.notes})")
+            lines.append(
+                f"- [{f.kind}] {f.path} ({f.notes}) | lockin_count={f.lockin_count} | lockin_details={f.lockin_details or '-'}"
+            )
     else:
         lines.append("## No Changes")
         lines.append("All inventory items are identical to previous run.")
@@ -173,12 +177,12 @@ def write_delta_excel(
     sheets = {}
     for sheet_name in SHEET_ORDER:
         ws = wb.create_sheet(title=sheet_name)
-        ws.append(["kind", "path", "notes"])
+        ws.append(["kind", "path", "notes", "lockin_count", "lockin_details"])
         sheets[sheet_name] = ws
     
     for item in delta_findings:
         sheet_name = KIND_TO_SHEET.get(item.kind, "Workspace Objects")
-        sheets[sheet_name].append([item.kind, item.path, item.notes])
+        sheets[sheet_name].append([item.kind, item.path, item.notes, item.lockin_count, item.lockin_details])
     
     # Warnings sheet
     if warnings:

@@ -1,12 +1,33 @@
 """Asset collection functions for Databricks workspace."""
 
+import base64
 import os
 from typing import List, Tuple
 
 from databricks.sdk import WorkspaceClient
 
+from .lockin import analyze_cloud_lockin, format_lockin_details
 from .models import Finding
 from .utils import safe_iter, safe_list_call
+
+
+def _read_notebook_source(client: WorkspaceClient, notebook_path: str, warnings: List[str]) -> str:
+    """Read notebook source for lock-in analysis when available."""
+    if not hasattr(client, "workspace") or not hasattr(client.workspace, "export"):
+        return ""
+
+    try:
+        export_obj = client.workspace.export(path=notebook_path, format="SOURCE")
+        raw_content = getattr(export_obj, "content", "") or ""
+        if not raw_content:
+            return ""
+        try:
+            return base64.b64decode(raw_content).decode("utf-8", errors="ignore")
+        except Exception:
+            return str(raw_content)
+    except Exception as exc:
+        warnings.append(f"workspace.export failed for {notebook_path}: {exc}")
+        return ""
 
 
 def collect_workspace_objects(
@@ -36,7 +57,20 @@ def collect_workspace_objects(
             else:
                 kind = "workspace_notebook" if str(obj_type) == "NOTEBOOK" else "workspace_file"
                 lang = getattr(obj, "language", "unknown")
-                findings.append(Finding(obj_path, kind, f"language: {lang}"))
+                if kind == "workspace_notebook":
+                    notebook_source = _read_notebook_source(client, obj_path, warnings)
+                    analysis = analyze_cloud_lockin(notebook_source)
+                    findings.append(
+                        Finding(
+                            obj_path,
+                            kind,
+                            f"language: {lang}",
+                            lockin_count=analysis.get("total", 0),
+                            lockin_details=format_lockin_details(analysis),
+                        )
+                    )
+                else:
+                    findings.append(Finding(obj_path, kind, f"language: {lang}"))
     
     return findings
 

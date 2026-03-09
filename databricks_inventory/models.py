@@ -9,3 +9,5 @@ class Finding:
     path: str
     kind: str
     notes: str
+    lockin_count: int = 0
+    lockin_details: str = ""

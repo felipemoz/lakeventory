@@ -1,4 +1,5 @@
 import os
+import base64
 
 from databricks_inventory.collectors import (
     collect_workspace_objects,
@@ -41,6 +42,11 @@ class WorkspaceService:
     def list(self, path="/"):
         return self._by_path.get(path, [])
 
+    def export(self, path="/", format="SOURCE"):
+        source = self._by_path.get("__source__", {}).get(path, "")
+        encoded = base64.b64encode(source.encode("utf-8")).decode("utf-8")
+        return Obj(content=encoded)
+
 
 class FakeClient:
     def __init__(self, workspace_by_path):
@@ -57,6 +63,9 @@ def test_collect_workspace_objects():
     ws = {
         "/": [Obj(object_type="DIRECTORY", path="/dir"), Obj(object_type="NOTEBOOK", path="/nb", language="PY")],
         "/dir": [],
+        "__source__": {
+            "/nb": "import boto3\ndf = spark.read.parquet('s3://bucket/path')",
+        },
     }
     client = FakeClient(ws)
     warnings = []
@@ -66,6 +75,9 @@ def test_collect_workspace_objects():
     kinds = {f.kind for f in findings}
     assert "workspace_dir" in kinds
     assert "workspace_notebook" in kinds
+    notebook_item = next(f for f in findings if f.kind == "workspace_notebook")
+    assert notebook_item.lockin_count >= 2
+    assert "aws" in notebook_item.lockin_details
     assert warnings == []
 
 

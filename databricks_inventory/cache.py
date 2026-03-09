@@ -4,7 +4,6 @@ Handles storing and comparing inventory snapshots to detect changes.
 """
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -58,6 +57,8 @@ class InventoryCache:
                     "path": f.path,
                     "kind": f.kind,
                     "notes": f.notes or "",
+                    "lockin_count": f.lockin_count,
+                    "lockin_details": f.lockin_details or "",
                 }
                 for f in findings
             ]
@@ -108,7 +109,11 @@ class InventoryCache:
         for key, finding in current_key_to_finding.items():
             if key not in previous_keys:
                 added.append(finding)
-            elif previous_keys[key].get("notes") != finding.notes:
+            elif (
+                previous_keys[key].get("notes") != finding.notes
+                or previous_keys[key].get("lockin_count", 0) != finding.lockin_count
+                or previous_keys[key].get("lockin_details", "") != finding.lockin_details
+            ):
                 modified.append(finding)
             else:
                 unchanged.append(finding)

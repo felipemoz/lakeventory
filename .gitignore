@@ -71,6 +71,8 @@ databricks_full.xlsx
 *.md
 *.xlsx
 !README.md
+!docs/
+!docs/*.md
 /output/*
 
 # Backup files
