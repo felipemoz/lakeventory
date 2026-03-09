@@ -1,0 +1,38 @@
+# Lakeventory Multi-Workspace Configuration
+# ==========================================
+# Copy this file to workspaces.yaml and configure your workspace details.
+#
+# Usage:
+#   make inventory-all-workspaces
+#   make inventory-all-workspaces WORKSPACES_CONFIG=workspaces.yaml
+#   python -m lakeventory.multi_workspace_cli --config workspaces.yaml
+
+workspaces:
+  - name: dev
+    env_file: .env.dev          # Path to the .env file for this workspace
+    output_dir: .reports/dev    # Where to write this workspace's individual reports
+    batch_size: 200
+    batch_sleep_ms: 0
+    serverless: false           # Set true to skip cluster collectors
+
+  - name: staging
+    env_file: .env.staging
+    output_dir: .reports/staging
+    batch_size: 200
+
+  - name: prod
+    env_file: .env.prod
+    output_dir: .reports/prod
+    batch_size: 100
+    serverless: true            # Skip cluster collectors in serverless mode
+
+# Optional per-workspace fields (all have defaults):
+#   collectors:          ""          # Comma-separated collector list (empty = all)
+#   include_runs:        false       # Include job runs (heavy)
+#   include_query_history: false     # Include SQL query history (heavy)
+#   include_dbfs:        false       # Include DBFS root listing (heavy)
+
+# Consolidated comparison report settings
+comparison:
+  output_dir: .reports                   # Directory for the comparison report
+  out_xlsx: compare_workspaces.xlsx      # Filename for the comparison Excel report

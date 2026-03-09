@@ -2,6 +2,7 @@
 	inventory inventory-basic inventory-batch inventory-serverless inventory-no-progress \
 	inventory-debug inventory-error inventory-verbose \
 	inventory-selective inventory-full inventory-incremental \
+	inventory-all-workspaces \
 	inventory-validate \
 	cache-clear cache-info
 
@@ -9,6 +10,7 @@ PYTHON ?= python3
 OUT ?= report.md
 OUT_XLSX ?= report.xlsx
 OUTPUT_DIR ?= ./.reports
+WORKSPACES_CONFIG ?= workspaces.yaml
 COLLECTORS ?= jobs,clusters,sql,mlflow,unity_catalog,repos,security,identities,serving,sharing,dbfs
 BATCH_SIZE ?= 200
 BATCH_SLEEP_MS ?= 0
@@ -33,6 +35,7 @@ help:
 	@echo "  make inventory-verbose      # info/verbose logs"
 	@echo "  make inventory-selective    # selected collectors only"
 	@echo "  make inventory-full         # heavy collectors enabled"
+	@echo "  make inventory-all-workspaces   # run inventory across all configured workspaces"
 	@echo "  make cache-info             # show cache snapshot info"
 	@echo "  make cache-clear            # clear cache snapshots"
 	@echo ""
@@ -41,6 +44,7 @@ help:
 	@echo "  OUT=file.md                 # output markdown file (default: report.md)"
 	@echo "  OUT_XLSX=file.xlsx          # output Excel file"
 	@echo "  COLLECTORS=list             # comma-separated collectors"
+	@echo "  WORKSPACES_CONFIG=path      # workspaces YAML config (default: workspaces.yaml)"
 	@echo "  BATCH_SIZE=N                # items per batch (default: 200)"
 	@echo "  BATCH_SLEEP_MS=N            # sleep ms between batches"
 	@echo "  LOG_LEVEL=level             # debug, info, error, warning (default: info)"
@@ -50,6 +54,7 @@ help:
 	@echo "  make inventory OUTPUT_DIR=./reports"
 	@echo "  make inventory-full OUTPUT_DIR=/tmp/reports BATCH_SIZE=100"
 	@echo "  make inventory-selective OUTPUT_DIR=./data COLLECTORS=workspace,jobs"
+	@echo "  make inventory-all-workspaces WORKSPACES_CONFIG=workspaces.yaml"
 
 install:
 	pip3 install -r requirements.txt
@@ -171,3 +176,11 @@ cache-info:
 cache-clear:
 	@echo "Clearing inventory cache..."
 	$(PYTHON) -c "from lakeventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); deleted = c.clear_cache(); print(f'Deleted {deleted} snapshot files')"
+
+inventory-all-workspaces:
+	@echo "Running inventory across all configured workspaces ($(WORKSPACES_CONFIG))..."
+	$(PYTHON) -m lakeventory.multi_workspace_cli \
+		--config $(WORKSPACES_CONFIG) \
+		--log-level $(LOG_LEVEL) \
+		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
+		$(if $(COMPARISON_OUT),--comparison-out $(COMPARISON_OUT),)
