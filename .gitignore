@@ -75,6 +75,5 @@ databricks_full.xlsx
 !docs/
 !docs/*.md
 /output/*
+.reports/*
 
-# Backup files
-inventory_databricks_assets_old.py
