@@ -3,6 +3,7 @@
 import sys
 import os
 from pathlib import Path
+from itertools import islice
 
 
 def run_health_check():
@@ -91,7 +92,7 @@ def run_health_check():
         print(f"  ✅ Connected to workspace ID: {workspace_id}")
         
         # Try a simple API call to verify access
-        list(client.workspace.list(path="/", limit=1))
+        list(islice(client.workspace.list(path="/"), 1))
         print(f"  ✅ Can list workspace objects")
         
     except Exception as e:
