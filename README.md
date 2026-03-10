@@ -1,5 +1,8 @@
 # Lakeventory
 
+[![Docker Publish](https://github.com/felipemoz/lakeventory/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/felipemoz/lakeventory/actions/workflows/docker-publish.yml)
+[![Python Publish](https://github.com/felipemoz/lakeventory/actions/workflows/python-publish.yml/badge.svg)](https://github.com/felipemoz/lakeventory/actions/workflows/python-publish.yml)
+
 Automated discovery and inventory of Databricks workspace assets and dependencies. Exports to Markdown or Excel with cloud provider detection and workspace ID auto-sensing.
 
 ## Installation
@@ -111,6 +114,14 @@ See [docs/CLI.md](docs/CLI.md) for complete CLI documentation.
 | **Permissions** | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
 | **Usage Examples** | [docs/USAGE.md](docs/USAGE.md) |
 | **Troubleshooting** | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
+
+---
+
+## CI/CD Status
+
+The badges above reflect the current pipeline status:
+- Docker image build and publish (alpine, distroless, static)
+- Python package build and publish (PyPI)
 
 ---
 

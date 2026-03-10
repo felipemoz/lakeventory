@@ -20,7 +20,7 @@ jobs:
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install build
+          python -m pip install --upgrade setuptools wheel build twine
 
       - name: Install test dependencies
         run: |
@@ -31,7 +31,10 @@ jobs:
         run: python -m pytest -q
 
       - name: Build package
-        run: python -m build
+        run: python -m build --sdist --wheel
+
+      - name: Verify package metadata
+        run: python -m twine check dist/*
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
