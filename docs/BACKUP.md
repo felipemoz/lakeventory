@@ -1,23 +1,23 @@
 # Workspace Backup
 
-Guia de backup de workspace Databricks usando export em formato `.dbc` com compactacao final em `.zip`.
+Databricks workspace backup guide using `.dbc` exports with final `.zip` packaging.
 
-## Visao Geral
+## Overview
 
-O modo de backup exporta objetos do workspace de forma recursiva e gera:
+Backup mode recursively exports workspace objects and generates:
 
-- Pasta com os arquivos exportados (`.dbc`)
-- Arquivo `.zip` com todo o backup consolidado
+- A folder containing exported `.dbc` files
+- A consolidated `.zip` archive
 
-Fluxo:
-1. Lista diretorios/objetos recursivamente
-2. Exporta item a item via Workspace Export API
-3. Salva localmente como `.dbc`
-4. Gera um `.zip` final
+Flow:
+1. List directories/objects recursively
+2. Export each item using the Workspace Export API
+3. Save locally as `.dbc`
+4. Generate final `.zip`
 
-## Configuracao via `config.yaml`
+## Configuration via `config.yaml`
 
-Arquivo: `.lakeventory/config.yaml`
+File: `.lakeventory/config.yaml`
 
 ```yaml
 global_config:
@@ -26,48 +26,48 @@ global_config:
   backup_output_dir: ./backups
 ```
 
-- `backup_workspace`: habilita backup antes da coleta
-- `backup_output_dir`: diretorio base do backup
-  - vazio (`""`) => usa `output_dir`
+- `backup_workspace`: enables backup before inventory collection
+- `backup_output_dir`: backup base directory
+  - empty (`""`) => uses `output_dir`
 
-## Configuracao via variáveis de ambiente (CI/CD)
+## Configuration via Environment Variables (CI/CD)
 
-Para sobrescrever temporariamente em pipelines:
+Use temporary overrides in pipelines:
 
 ```bash
 export BACKUP_WORKSPACE=true
 export BACKUP_OUTPUT_DIR=./backups
 ```
 
-## Prioridade de parametros
+## Parameter Precedence
 
-Ordem de precedencia:
+Order of precedence:
 
-1. CLI
+1. CLI flags
 2. `config.yaml`
-3. Variáveis de ambiente (`BACKUP_WORKSPACE`, `BACKUP_OUTPUT_DIR`)
+3. Environment variables (`BACKUP_WORKSPACE`, `BACKUP_OUTPUT_DIR`)
 
-## Comandos
+## Commands
 
-### Backup de um workspace
+### Single Workspace Backup
 
 ```bash
 python -m lakeventory --workspace prod --backup-workspace
 ```
 
-Com Makefile:
+With Makefile:
 
 ```bash
 make inventory-backup BACKUP_OUT_DIR=./backups
 ```
 
-### Backup de todos os workspaces
+### Backup All Workspaces
 
 ```bash
 python -m lakeventory --all-workspaces --backup-workspace
 ```
 
-Com Makefile:
+With Makefile:
 
 ```bash
 make inventory-all-backup BACKUP_OUT_DIR=./backups
@@ -75,15 +75,15 @@ make inventory-all-backup BACKUP_OUT_DIR=./backups
 
 ## Setup Wizard (`make setup`)
 
-No wizard existe a opcao:
+The wizard includes:
 
 - `Configure backup settings`
 
-Ela grava os campos `backup_workspace` e `backup_output_dir` no `global_config`.
+It writes `backup_workspace` and `backup_output_dir` in `global_config`.
 
-## Estrutura de saida
+## Output Structure
 
-Exemplo:
+Example:
 
 ```text
 <backup_output_dir>/
@@ -94,8 +94,8 @@ Exemplo:
 <backup_output_dir>/workspace_backup_<workspace_id>_<timestamp>.zip
 ```
 
-## Limitacao de tamanho (10 MB)
+## Size Limitation (10 MB)
 
-A API tem limite por request/conteudo em alguns modos. Para reduzir falhas, o backup exporta item por item e nao tenta exportacao unica do workspace inteiro.
+Some API paths have per-request/content limits. To reduce failures, backup exports items one by one instead of attempting a single full-workspace export.
 
-Se um item individual ultrapassar limite/nao puder ser exportado, ele aparece em `Backup warnings`.
+If an item exceeds limits or cannot be exported, it is listed under `Backup warnings`.

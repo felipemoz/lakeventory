@@ -144,7 +144,7 @@ Output structure (resolved from YAML `output_dir`):
 
 ### Custom Output Directory
 
-Via `config.yaml` (configuração persistente):
+Via `config.yaml` (persistent configuration):
 ```yaml
 global_config:
   output_dir: ./my-reports

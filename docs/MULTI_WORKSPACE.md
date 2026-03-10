@@ -200,16 +200,16 @@ make inventory-workspace WORKSPACE=serverless SERVERLESS=1
 make inventory-all SERVERLESS=1
 ```
 
-## Migração de configuração anterior
+## Legacy Configuration Migration
 
-Se você usava variáveis de ambiente (método legado), execute o wizard:
+If you were using environment variables (legacy method), run the wizard:
 
 ```bash
 make setup
 ```
 
-O wizard interativo irá criar `.lakeventory/config.yaml` com seu workspace
-como entrada `default`.
+The interactive wizard creates `.lakeventory/config.yaml` with your workspace
+as the `default` entry.
 
 ## Advanced Usage
 
