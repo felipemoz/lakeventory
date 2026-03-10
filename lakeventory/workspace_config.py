@@ -4,7 +4,7 @@ import os
 import yaml
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 
 
 @dataclass
@@ -60,6 +60,10 @@ class GlobalConfig:
     include_dbfs: bool = False
     backup_workspace: bool = False
     backup_output_dir: str = ""
+    # Per-request HTTP timeout for Databricks SDK calls (seconds).
+    # None = SDK default (no explicit timeout).  Increase for large workspaces
+    # where collectors like tables.list() or users.list() can take minutes.
+    http_timeout_seconds: Optional[int] = None
     enabled_collectors: List[str] = field(default_factory=lambda: [
         "workspace", "jobs", "clusters", "sql", "mlflow", 
         "unity_catalog", "repos", "security", "identities", "serving"
@@ -89,8 +93,10 @@ class LakeventoryConfig:
         for name, ws_data in data.get("workspaces", {}).items():
             workspaces[name] = WorkspaceConfig(name=name, **ws_data)
         
-        # Parse global config
+        # Parse global config – ignore unknown keys for forward-compatibility
         global_data = data.get("global_config", {})
+        known_fields = {f.name for f in fields(GlobalConfig)}
+        global_data = {k: v for k, v in global_data.items() if k in known_fields}
         global_config = GlobalConfig(**global_data)
         
         return cls(
@@ -114,11 +120,15 @@ class LakeventoryConfig:
             ws_dict = {k: v for k, v in ws_dict.items() if v is not None}
             workspaces_dict[name] = ws_dict
         
+        # Convert global_config to dict, filtering out None values so the YAML
+        # stays clean and unset optional fields are omitted.
+        global_config_dict = {k: v for k, v in asdict(self.global_config).items() if v is not None}
+        
         data = {
             "version": self.version,
             "default_workspace": self.default_workspace,
             "workspaces": workspaces_dict,
-            "global_config": asdict(self.global_config),
+            "global_config": global_config_dict,
         }
         
         with open(config_path, 'w') as f:

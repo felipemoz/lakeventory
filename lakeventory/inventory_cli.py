@@ -82,6 +82,11 @@ def _apply_config_defaults(args, config) -> None:
     if args.batch_sleep_ms is None:
         args.batch_sleep_ms = getattr(global_cfg, "batch_sleep_ms", 0)
 
+    if getattr(args, "http_timeout_seconds", None) is None:
+        cfg_timeout = getattr(global_cfg, "http_timeout_seconds", None)
+        if cfg_timeout is not None:
+            args.http_timeout_seconds = cfg_timeout
+
     if args.include_runs is None:
         args.include_runs = getattr(global_cfg, "include_runs", False)
     if args.include_query_history is None:
@@ -175,6 +180,18 @@ def main() -> int:
         type=int,
         default=None,
         help="Sleep time in ms between batches",
+    )
+    parser.add_argument(
+        "--http-timeout",
+        type=int,
+        default=None,
+        dest="http_timeout_seconds",
+        metavar="SECONDS",
+        help=(
+            "Per-request HTTP timeout in seconds for Databricks SDK calls "
+            "(overrides global_config.http_timeout_seconds in config.yaml). "
+            "Increase for large workspaces where collectors can take several minutes."
+        ),
     )
     parser.add_argument(
         "--incremental",
@@ -342,7 +359,10 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
 
     # Build client and collect findings
     logger.info("Connecting to Databricks workspace...")
-    client = build_workspace_client(root)
+    http_timeout = getattr(args, "http_timeout_seconds", None)
+    if http_timeout is not None:
+        logger.debug("HTTP timeout for SDK requests: %ss", http_timeout)
+    client = build_workspace_client(root, http_timeout_seconds=http_timeout)
 
     workspace_id = _extract_workspace_id(os.getenv("DATABRICKS_HOST", ""))
     logger.info("Using workspace_id: %s", workspace_id)

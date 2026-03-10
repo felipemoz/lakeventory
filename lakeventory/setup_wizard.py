@@ -1,5 +1,6 @@
 """Interactive setup wizard for Lakeventory multi-workspace configuration."""
 
+import concurrent.futures
 import getpass
 import os
 import re
@@ -9,6 +10,10 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.config import Config as DatabricksConfig
+
+_CONNECTION_TIMEOUT_SECONDS = 30  # Overall timeout for connection test
+_HTTP_TIMEOUT_SECONDS = 10  # Per-request HTTP timeout
 
 from lakeventory.workspace_config import (
     ConfigManager,
@@ -100,40 +105,55 @@ def _extract_workspace_id(host: str) -> str:
 
 
 def test_connection(workspace: WorkspaceConfig) -> Optional[dict]:
-    """Test workspace connection and return info if successful."""
-    try:
-        client = _build_workspace_client(workspace)
-        
-        # Get workspace info
-        status = client.workspace.get_status(path="/")
-        workspace_id = getattr(status, "workspace_id", None) or getattr(status, "object_id", None)
-        if not workspace_id:
-            workspace_id = _extract_workspace_id(workspace.host)
-        
-        # Try to get current user
+    """Test workspace connection and return info if successful.
+
+    Uses a thread-based timeout to prevent hanging indefinitely on
+    unreachable or invalid hosts.
+    """
+    def _run_test():
         try:
-            current_user = client.current_user.me()
-            user_name = current_user.user_name
-        except:
-            user_name = "Unknown"
-        
-        # Run permissions validation
-        validator = PermissionsValidator(client)
-        all_passed, results, warnings = validator.validate_all()
-        
-        collectors_available = sum(1 for passed in results.values() if passed)
-        collectors_total = len(results)
-        
-        return {
-            "workspace_id": workspace_id,
-            "user_name": user_name,
-            "collectors_available": collectors_available,
-            "collectors_total": collectors_total,
-            "permissions_check": results,
-        }
-    except Exception as e:
-        print(f"  ❌ Connection failed: {str(e)}")
+            client = _build_workspace_client(workspace)
+
+            # Get workspace info
+            status = client.workspace.get_status(path="/")
+            workspace_id = getattr(status, "workspace_id", None) or getattr(status, "object_id", None)
+            if not workspace_id:
+                workspace_id = _extract_workspace_id(workspace.host)
+
+            # Try to get current user
+            try:
+                current_user = client.current_user.me()
+                user_name = current_user.user_name
+            except Exception:
+                user_name = "Unknown"
+
+            # Run permissions validation
+            validator = PermissionsValidator(client)
+            all_passed, results, warnings = validator.validate_all()
+
+            collectors_available = sum(1 for passed in results.values() if passed)
+            collectors_total = len(results)
+
+            return {
+                "workspace_id": workspace_id,
+                "user_name": user_name,
+                "collectors_available": collectors_available,
+                "collectors_total": collectors_total,
+                "permissions_check": results,
+            }
+        except Exception as e:
+            print(f"  ❌ Connection failed: {str(e)}")
+            return None
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(_run_test)
+    try:
+        return future.result(timeout=_CONNECTION_TIMEOUT_SECONDS)
+    except concurrent.futures.TimeoutError:
+        print(f"  ❌ Connection timed out after {_CONNECTION_TIMEOUT_SECONDS}s")
         return None
+    finally:
+        executor.shutdown(wait=False)
 
 
 def add_workspace_wizard(config: LakeventoryConfig) -> Optional[WorkspaceConfig]:
@@ -263,13 +283,23 @@ def list_workspaces(config: LakeventoryConfig) -> None:
         host_short = ws.host.replace('https://', '')[:38]
         
         # Quick connection test
-        status = "⏳"
+        status = "❌"
         try:
-            client = _build_workspace_client(ws)
-            client.workspace.get_status(path="/")
-            status = "✅"
-        except:
-            status = "❌"
+            def _quick_check(ws=ws):
+                client = _build_workspace_client(ws)
+                client.workspace.get_status(path="/")
+
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(_quick_check)
+            try:
+                future.result(timeout=_CONNECTION_TIMEOUT_SECONDS)
+                status = "✅"
+            except concurrent.futures.TimeoutError:
+                pass  # status stays "❌"
+            finally:
+                executor.shutdown(wait=False)
+        except Exception:
+            pass  # status stays "❌"
         
         print(f"{name:<15}{default_marker:<2} {host_short:<38} {ws.auth_method:<18} {status}")
     
@@ -305,13 +335,20 @@ def remove_workspace_wizard(config: LakeventoryConfig) -> bool:
 def _build_workspace_client(workspace: WorkspaceConfig) -> WorkspaceClient:
     """Build a WorkspaceClient from WorkspaceConfig fields."""
     if workspace.auth_method == "service_principal":
-        return WorkspaceClient(
+        config = DatabricksConfig(
             host=workspace.host,
             client_id=workspace.client_id,
             client_secret=workspace.client_secret,
+            http_timeout_seconds=_HTTP_TIMEOUT_SECONDS,
         )
-    # Default: PAT
-    return WorkspaceClient(host=workspace.host, token=workspace.token)
+    else:
+        # Default: PAT
+        config = DatabricksConfig(
+            host=workspace.host,
+            token=workspace.token,
+            http_timeout_seconds=_HTTP_TIMEOUT_SECONDS,
+        )
+    return WorkspaceClient(config=config)
 
 
 def configure_backup_settings(config: LakeventoryConfig) -> None:
