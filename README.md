@@ -7,41 +7,20 @@ Automated discovery and inventory of Databricks workspace assets and dependencie
 
 ## Installation
 
-### Option 1: Install as CLI (Recommended)
+Método oficial (único documentado):
+
+Instalação rápida (curl + bash):
 
 ```bash
-# Clone repository
+curl -fsSL https://github.com/felipemoz/lakeventory/raw/main/scripts/install.sh | bash
+```
+
+Ou manualmente:
+
+```bash
 git clone https://github.com/felipemoz/lakeventory.git
 cd lakeventory
-
-# Install CLI
-pip install -e .
-
-# Use directly
-lakeventory --version
-lakeventory collect --out report.md
-```
-
-### Option 2: Use without Installation
-
-### Single Workspace (Legacy)
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run with Python module
-python -m lakeventory --source sdk --out report.md
-```
-
-### Option 3: Standalone Executable
-
-```bash
-# Build executable (no Python required on target machine)
-make build-exe
-
-# Run
-./dist/lakeventory version
-./dist/lakeventory collect --out report.md
+make install
 ```
 
 ---
@@ -49,44 +28,30 @@ make build-exe
 ## Quick Start
 
 ```bash
-# Using CLI (after pip install -e .)
-lakeventory collect --out report.md
-
-# Or with Excel output
-lakeventory collect --out report.md --out-xlsx report.xlsx
-
-# Legacy method (still works)
-python -m lakeventory --source sdk --out report.md
-```
-
-**Via Makefile:**
-```bash
-make check       # Verify setup
-make install-cli # Install CLI command
-make inventory   # Generate report
+make setup            # Cria/atualiza .lakeventory/config.yaml
+make check            # Valida configuração e conexão
+make inventory        # Executa inventário no workspace default
+make inventory-all    # Executa em todos os workspaces do config.yaml
 ```
 
 ---
 
-## CLI Commands
+## Execution Model
 
-The new CLI provides enhanced commands with better organization:
+O README documenta apenas execução via `make` para manter um fluxo único de operação.
+
+Comandos operacionais:
 
 ```bash
-# Main commands
-lakeventory collect         # Run inventory collection
-lakeventory cache list      # List cached snapshots
-lakeventory cache clear     # Clear cache
-lakeventory diff            # Compare two inventories
-lakeventory version         # Show version info
-
-# Examples
-lakeventory collect --incremental --out changes.md
-lakeventory cache list
-lakeventory diff --baseline old.md --current new.md --verbose
+make setup
+make check
+make inventory
+make inventory-workspace WORKSPACE=prod
+make inventory-all
+make inventory-backup
 ```
 
-See [docs/CLI.md](docs/CLI.md) for complete CLI documentation.
+Referência completa dos alvos: `make help`.
 
 ---
 
@@ -133,16 +98,14 @@ The badges above reflect the current pipeline status:
 - `databricks-sdk`, `openpyxl`, `tqdm`
 
 ```bash
-pip install -r requirements.txt
+make install
 ```
 
 ---
 
 ## Configuration
 
-### Option 1: Multi-Workspace (Recommended)
-
-Use the interactive setup wizard to configure multiple workspaces:
+Use o setup wizard para configurar workspaces:
 
 ```bash
 make setup
@@ -155,21 +118,6 @@ Configuration is stored in `.lakeventory/config.yaml` with support for:
 - Global settings (format: xlsx, batch size, collectors)
 
 **See [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md)** for complete guide.
-
-### Option 2: Single Workspace
-
-Use o mesmo wizard — ele cria um único workspace `default`:
-
-```bash
-make setup
-```
-
-Ou copie o template e edite manualmente:
-
-```bash
-cp .lakeventory/config.yaml.example .lakeventory/config.yaml
-# Edite com host e token/SP
-```
 
 **See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** for auth methods (PAT, Service Principal).
 
@@ -191,38 +139,30 @@ This validates:
 
 ## Common Commands
 
-### Standard Run
+### Setup e validação
 ```bash
-python -m lakeventory --source sdk --out report.md
+make setup
+make check
 ```
 
-### With Excel Output
+### Execução
 ```bash
-python -m lakeventory --source sdk --out-xlsx report.xlsx
+make inventory
+make inventory-workspace WORKSPACE=prod
+make inventory-all
 ```
 
-### Validate Permissions First
+### Modos e variações
 ```bash
-python -m lakeventory --validate-permissions --source sdk
+make inventory-validate
+make inventory-selective COLLECTORS=workspace,jobs
+make inventory-full
+make inventory-incremental
+make inventory-backup
+make inventory-all-backup
 ```
 
-### Selective Collectors
-```bash
-python -m lakeventory --source sdk --collectors workspace,jobs,clusters
-```
-
-### Serverless Workspace
-```bash
-python -m lakeventory --source sdk --serverless
-```
-
-### Large Workspaces (with batching)
-```bash
-python -m lakeventory --source sdk \
-  --batch-size 100 --batch-sleep-ms 300
-```
-
-**See [docs/USAGE.md](docs/USAGE.md)** for complete command reference and Makefile targets.
+**See [docs/USAGE.md](docs/USAGE.md)** for complete Makefile reference.
 
 ---
 
@@ -291,8 +231,7 @@ lakeventory/
 ## Testing
 
 ```bash
-pip install -r requirements.txt
-pytest -q
+make test
 ```
 
 ---
@@ -312,7 +251,7 @@ pytest -q
 | Selective collectors | ✅ Complete |
 | Serverless mode | ✅ Complete |
 | Permission validation | ✅ Complete |
-| Testing (89 tests) | ✅ Complete |
+| Testing | ✅ Complete |
 
 ---
 
