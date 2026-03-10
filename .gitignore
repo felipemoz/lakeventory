@@ -36,6 +36,9 @@ venv.bak/
 .env.local
 .env.*.local
 
+# Lakeventory multi-workspace configuration (contains secrets)
+.lakeventory/config.yaml
+
 # IDE
 .vscode/
 .idea/

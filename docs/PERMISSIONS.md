@@ -1,5 +1,25 @@
 # Permissions Guide
 
+## Multi-Workspace Permissions
+
+When using multi-workspace configuration, each workspace can have:
+- Different authentication methods (PAT, Service Principal)
+- Different user permissions
+- Different API access
+
+**Test permissions per workspace:**
+```bash
+# Test specific workspace
+python -m lakeventory --workspace prod --validate-permissions
+
+# Test all workspaces
+python -m lakeventory --all-workspaces --validate-permissions
+```
+
+**See [MULTI_WORKSPACE.md](MULTI_WORKSPACE.md)** for workspace setup.
+
+---
+
 ## Health Check (Before Starting)
 
 Verify that everything is properly configured:

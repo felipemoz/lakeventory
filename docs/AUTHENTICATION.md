@@ -1,6 +1,54 @@
 # Authentication Guide
 
-The tool supports **3 authentication methods** (in order of priority):
+The tool supports **2 authentication methods** (in order of priority):
+
+1. **Service Principal** (recommended for production/CI-CD)
+2. **PAT Token** (for development/testing)
+
+## 🆕 Multi-Workspace Configuration
+
+**Recommended:** Use the interactive setup wizard to configure multiple workspaces:
+
+```bash
+make setup
+# or: python -m lakeventory setup
+```
+
+This creates `.lakeventory/config.yaml` with workspace-specific authentication:
+
+```yaml
+version: "1.0"
+default_workspace: prod
+
+workspaces:
+  # PAT Token example
+  prod:
+    host: https://adb-3456789.13.azuredatabricks.net
+    auth_method: pat
+    token: dapi...
+    description: Production workspace
+  
+  # Service Principal example
+  staging:
+    host: https://adb-2345678.13.azuredatabricks.net
+    auth_method: service_principal
+    client_id: xxxx-xxxx-xxxx
+    client_secret: yyyy
+    tenant_id: zzzz-zzzz-zzzz
+    description: Staging workspace
+
+global_config:
+  output_dir: ./output
+  output_format: xlsx
+```
+
+**See [MULTI_WORKSPACE.md](MULTI_WORKSPACE.md)** for complete guide.
+
+---
+
+## Single Workspace Authentication (Legacy)
+
+For single workspace, configure via `.env` file:
 
 ## 1️⃣ Service Principal (Recommended for Production/CI-CD)
 
@@ -92,21 +140,6 @@ DATABRICKS_TOKEN=<your-pat-token>
 
 ---
 
-## 3️⃣ Username + Password (Basic Auth)
-
-Use your Databricks username and password.
-
-### Configure in `.env`
-
-```env
-DATABRICKS_HOST=https://<workspace-host>
-DATABRICKS_USERNAME=<your-username>
-DATABRICKS_PASSWORD=<your-password>
-```
-
-⚠️ **Not recommended** for production or CI/CD. Use Service Principal instead.
-
----
 
 ## Priority & Automatic Detection
 
@@ -114,8 +147,7 @@ The tool **automatically detects** which authentication method is configured:
 
 ```
 1. Service Principal (DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET) ← Highest Priority
-2. PAT Token (DATABRICKS_TOKEN)
-3. Basic Auth (DATABRICKS_USERNAME + DATABRICKS_PASSWORD) ← Lowest Priority
+2. PAT Token (DATABRICKS_TOKEN) ← Lowest Priority
 ```
 
 The first one found will be used. If multiple are configured, only the highest priority will be used.

@@ -2,8 +2,10 @@
 
 import sys
 import os
+import re
 from pathlib import Path
 from itertools import islice
+from urllib.parse import urlparse
 
 
 def run_health_check():
@@ -88,7 +90,14 @@ def run_health_check():
         )
         
         # Try to get workspace info
-        workspace_id = client.workspace.get_status(path="/").workspace_id
+        status = client.workspace.get_status(path="/")
+        workspace_id = getattr(status, "workspace_id", None) or getattr(status, "object_id", None)
+        if not workspace_id:
+            host = os.getenv("DATABRICKS_HOST", "")
+            parsed = urlparse(host)
+            hostname = parsed.hostname or host
+            match = re.search(r"adb-(\d+)", hostname)
+            workspace_id = match.group(1) if match else hostname or "workspace"
         print(f"  ✅ Connected to workspace ID: {workspace_id}")
         
         # Try a simple API call to verify access

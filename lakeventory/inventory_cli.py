@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -19,6 +20,7 @@ from lakeventory.output import (
     write_markdown,
 )
 from lakeventory.permissions_validator import PermissionsValidator
+from lakeventory.workspace_config import ConfigManager, WorkspaceConfig
 
 
 logger = logging.getLogger(__name__)
@@ -50,7 +52,26 @@ def _apply_workspace_id(name: str, workspace_id: str) -> str:
 
 def main() -> int:
     """Main entry point for inventory CLI."""
-    parser = argparse.ArgumentParser(description="Inventory Databricks assets in a workspace.")
+    parser = argparse.ArgumentParser(
+        description="Inventory Databricks assets in a workspace.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  lakeventory                         # Run on default workspace
+  lakeventory -w dev                  # Run on 'dev' workspace
+  lakeventory --all-workspaces        # Run on all workspaces
+  lakeventory --list-workspaces       # List configured workspaces
+  lakeventory setup                   # Interactive setup wizard
+        """
+    )
+    
+    # Special commands
+    parser.add_argument("command", nargs="?", help="Command: setup")
+    
+    # Multi-workspace support
+    parser.add_argument("-w", "--workspace", help="Workspace name to use (from config.yaml)")
+    parser.add_argument("--all-workspaces", action="store_true", help="Run on all configured workspaces")
+    parser.add_argument("--list-workspaces", action="store_true", help="List configured workspaces and exit")
+    
     parser.add_argument("--root", default=".", help="Workspace root to scan")
     parser.add_argument(
         "--out-dir",
@@ -130,8 +151,85 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # Handle special commands first
+    if args.command == "setup":
+        from lakeventory.setup_wizard import run_setup_wizard
+        return run_setup_wizard()
+    
     configure_logging(args.log_level)
     logger.debug("Parsed CLI args: %s", args)
+    
+    # Load multi-workspace configuration
+    config_manager = ConfigManager()
+    config = config_manager.load()
+    
+    # Handle --list-workspaces
+    if args.list_workspaces:
+        if not config.workspaces:
+            print("No workspaces configured. Run 'lakeventory setup' to add workspaces.")
+            return 0
+        
+        print(f"\n{'Name':<15} {'Host':<45} {'Auth Method':<20}")
+        print('─' * 85)
+        for name, ws in config.workspaces.items():
+            default_marker = " *" if name == config.default_workspace else ""
+            host_short = ws.host.replace('https://', '')[:43]
+            print(f"{name:<15}{default_marker:<2} {host_short:<43} {ws.auth_method:<18}")
+        
+        if config.default_workspace:
+            print(f"\n* = default workspace")
+        return 0
+    
+    # Handle --all-workspaces
+    if args.all_workspaces:
+        if not config.workspaces:
+            logger.error("No workspaces configured. Run 'lakeventory setup' first.")
+            return 1
+        
+        logger.info("Running inventory on all %d workspaces", len(config.workspaces))
+        
+        for workspace_name in config.workspaces.keys():
+            logger.info("\n" + "=" * 60)
+            logger.info("Processing workspace: %s", workspace_name)
+            logger.info("=" * 60)
+            
+            result = _run_single_workspace(args, config, workspace_name)
+            if result != 0:
+                logger.error("Failed to process workspace: %s", workspace_name)
+        
+        return 0
+    
+    # Handle single workspace (explicit or default)
+    workspace_name = args.workspace or config.default_workspace
+    
+    if not workspace_name and not os.getenv("DATABRICKS_HOST"):
+        logger.error("No workspace specified and no default configured.")
+        logger.error("Run 'lakeventory setup' or use --workspace flag.")
+        return 1
+    
+    return _run_single_workspace(args, config, workspace_name)
+
+
+def _run_single_workspace(args, config, workspace_name: str = None) -> int:
+    """Run inventory on a single workspace."""
+    # Apply workspace configuration to environment if using config
+    if workspace_name:
+        workspace = config.get_workspace(workspace_name)
+        if not workspace:
+            logger.error("Workspace '%s' not found in configuration", workspace_name)
+            return 1
+        
+        logger.info("Using workspace: %s (%s)", workspace_name, workspace.host)
+        config_manager = ConfigManager()
+        config_manager.apply_workspace_env(workspace)
+        
+        # Override output directory with workspace-specific subdirectory
+        # Use workspace-specific output_dir if configured, otherwise use global
+        base_output_dir = workspace.output_dir or config.global_config.output_dir
+        workspace_output_dir = Path(base_output_dir) / workspace_name
+        workspace_output_dir.mkdir(parents=True, exist_ok=True)
+        if not args.out_dir:
+            args.out_dir = str(workspace_output_dir)
 
     root = Path(args.root).resolve()
     
@@ -261,3 +359,6 @@ def main() -> int:
                 logger.debug("warning: %s", warning)
 
     return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

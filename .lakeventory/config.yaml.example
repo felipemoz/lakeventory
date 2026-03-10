@@ -1,0 +1,49 @@
+# Lakeventory Multi-Workspace Configuration
+# This file is created by `lakeventory setup` wizard
+
+version: "1.0"
+
+# Default workspace to use when --workspace is not specified
+default_workspace: prod
+
+# Workspace configurations
+workspaces:
+  
+  # Production workspace
+  prod:
+    host: https://adb-3456789.13.azuredatabricks.net
+    auth_method: pat
+    token: dapi...  # Personal Access Token
+    description: Production environment
+    # output_dir: /custom/path/reports  # Optional: Override global output_dir
+  
+  # Staging workspace (Service Principal example)
+  staging:
+    host: https://adb-2345678.13.azuredatabricks.net
+    auth_method: service_principal
+    client_id: xxxx-xxxx-xxxx-xxxx
+    client_secret: yyyy
+    tenant_id: zzzz-zzzz-zzzz-zzzz
+    description: Staging environment
+    output_dir: ./staging-reports  # Example: Custom output directory
+
+# Global settings  
+global_config:
+  output_dir: ./output  # Default output directory for all workspaces
+  output_format: xlsx  # markdown, json, xlsx, all
+  batch_size: 200
+  batch_sleep_ms: 50
+  include_runs: false
+  include_query_history: false
+  include_dbfs: false
+  enabled_collectors:
+    - workspace
+    - jobs
+    - clusters
+    - sql
+    - mlflow
+    - unity_catalog
+    - repos
+    - security
+    - identities
+    - serving

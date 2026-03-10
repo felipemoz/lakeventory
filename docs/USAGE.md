@@ -1,15 +1,52 @@
 # Usage Guide
 
-## Quick Start
+## Multi-Workspace Support
+
+### Setup Workspaces
+```bash
+# Interactive setup wizard
+make setup
+# or: python -m lakeventory setup
+```
+
+This wizard will guide you through:
+1. Adding workspace configurations (host, auth method)
+2. Testing connections
+3. Setting default workspace
+4. Configuring global settings
+
+**See [MULTI_WORKSPACE.md](MULTI_WORKSPACE.md)** for complete guide.
+
+### List Workspaces
+```bash
+make list-workspaces
+# or: python -m lakeventory --list-workspaces
+```
+
+### Run on Specific Workspace
+```bash
+make inventory-workspace WORKSPACE=prod
+# or: python -m lakeventory --workspace prod
+```
+
+### Run on All Workspaces
+```bash
+make inventory-all
+# or: python -m lakeventory --all-workspaces
+```
+
+---
+
+## Single Workspace (Legacy)
 
 ### Basic Run
 ```bash
-python -m lakeventory --source sdk --out report.md
+python -m lakeventory --source sdk
 ```
 
-### With Excel Output
+### With Markdown Output (default is Excel/XLSX)
 ```bash
-python -m lakeventory --source sdk --out-xlsx report.xlsx
+python -m lakeventory --source sdk --out report.md
 ```
 
 ### With Batching (for large workspaces)
@@ -25,8 +62,27 @@ python -m lakeventory \
 
 ## Using Makefile
 
-### Standard Run
+### Multi-Workspace Commands
 ```bash
+# Setup wizard
+make setup
+
+# List configured workspaces
+make list-workspaces
+
+# Run on default workspace
+make inventory
+
+# Run on specific workspace
+make inventory-workspace WORKSPACE=prod
+
+# Run on all workspaces
+make inventory-all
+```
+
+### Single Workspace Commands
+```bash
+# Standard run
 make inventory
 ```
 
@@ -59,7 +115,34 @@ make inventory-validate
 
 ## Output Configuration
 
-### Custom Output Directory
+### Multi-Workspace Output
+
+With multi-workspace configuration, each workspace gets its own directory:
+
+```yaml
+# .lakeventory/config.yaml
+global_config:
+  output_dir: ./output      # Base directory
+  output_format: xlsx       # Default format (xlsx, markdown, json, all)
+
+workspaces:
+  prod:
+    # Uses: ./output/prod/
+  staging:
+    output_dir: /mnt/reports  # Custom: /mnt/reports/staging/
+```
+
+Output structure:
+```
+output/
+├── prod/
+│   ├── workspace_3456789_20260309_1549.xlsx
+│   └── .inventory_cache/
+└── staging/
+    └── workspace_2345678_20260309_1550.xlsx
+```
+
+### Custom Output Directory (Legacy)
 
 Via environment variable (`.env`):
 ```env
@@ -76,10 +159,19 @@ python -m lakeventory \
 
 ### Output Format
 
+**Default:** Excel (XLSX) format for easy browsing and filtering.
+
 Files are automatically timestamped and include workspace ID:
 ```
-output/<workspace_id>_report_20260309_1549.md
-output/<workspace_id>_report_20260309_1549.xlsx
+output/workspace_1234567_20260309_1549.xlsx
+output/workspace_1234567_20260309_1549.md  # if markdown format
+```
+
+**Change format:**
+```yaml
+# In .lakeventory/config.yaml
+global_config:
+  output_format: xlsx  # or: markdown, json, all
 ```
 
 ---

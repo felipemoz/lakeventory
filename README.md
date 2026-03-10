@@ -24,6 +24,7 @@ lakeventory collect --out report.md
 
 ### Option 2: Use without Installation
 
+### Single Workspace (Legacy)
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -138,7 +139,25 @@ pip install -r requirements.txt
 
 ## Configuration
 
-### Create `.env` file
+### Option 1: Multi-Workspace (Recommended)
+
+Use the interactive setup wizard to configure multiple workspaces:
+
+```bash
+make setup
+```
+
+Configuration is stored in `.lakeventory/config.yaml` with support for:
+- Multiple workspaces (dev, staging, prod)
+- PAT tokens or Service Principal authentication
+- Workspace-specific output directories
+- Global settings (format: xlsx, batch size, collectors)
+
+**See [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md)** for complete guide.
+
+### Option 2: Single Workspace (Legacy)
+
+Create `.env` file for single workspace:
 
 ```env
 DATABRICKS_HOST=https://<workspace-host>
@@ -146,7 +165,7 @@ DATABRICKS_TOKEN=<your-pat-token>
 OUTPUT_DIR=./output
 ```
 
-**See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** for other auth methods (Service Principal, Basic Auth).
+**See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** for other auth methods (Service Principal).
 
 ---
 
@@ -207,12 +226,28 @@ Reports include:
 - Summary counts by asset type
 - Full listing of workspace assets
 - Warnings for API errors or permission issues
-- Excel sheets for easy browsing and filtering
+- Excel sheets (default) for easy browsing and filtering
 
+### Single Workspace
 Files are automatically timestamped and include workspace ID:
 ```
-output/<workspace_id>_report_20260309_1549.md
+output/workspace_1234567_20260309_1549.xlsx
 ```
+
+### Multi-Workspace
+Organized by workspace name:
+```
+output/
+├── prod/
+│   ├── workspace_3456789_20260309_1549.xlsx
+│   └── .inventory_cache/
+├── staging/
+│   └── workspace_2345678_20260309_1550.xlsx
+└── dev/
+    └── workspace_1234567_20260309_1551.xlsx
+```
+
+**Default format:** XLSX (Excel) — configurable per workspace or globally
 
 ---
 
@@ -258,8 +293,10 @@ pytest -q
 | Feature | Status |
 |---------|--------|
 | 40+ API endpoints | ✅ Complete |
-| Authentication (SP, Token, Basic) | ✅ Complete |
-| Output (Markdown, Excel) | ✅ Complete |
+| Multi-workspace support | ✅ Complete |
+| Interactive setup wizard | ✅ Complete |
+| Authentication (PAT, Service Principal) | ✅ Complete |
+| Output (Excel, Markdown, JSON) | ✅ Complete |
 | Cloud provider detection | ✅ Complete |
 | Workspace ID auto-detect | ✅ Complete |
 | Batching & timeouts | ✅ Complete |
