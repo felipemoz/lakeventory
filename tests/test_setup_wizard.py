@@ -1,13 +1,17 @@
 """Tests for setup wizard utility functions."""
 
+import concurrent.futures
+import time
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 
 from lakeventory.setup_wizard import (
     validate_workspace_url,
     _extract_workspace_id,
     _build_workspace_client,
     edit_workspace_wizard,
+    _CONNECTION_TIMEOUT_SECONDS,
+    _HTTP_TIMEOUT_SECONDS,
 )
 from lakeventory.workspace_config import WorkspaceConfig
 
@@ -93,7 +97,8 @@ class TestBuildWorkspaceClient:
     """Tests for workspace client builder."""
     
     @patch('lakeventory.setup_wizard.WorkspaceClient')
-    def test_build_client_with_pat(self, mock_client):
+    @patch('lakeventory.setup_wizard.DatabricksConfig')
+    def test_build_client_with_pat(self, mock_config_cls, mock_client):
         """Test building client with PAT authentication."""
         workspace = WorkspaceConfig(
             name="test",
@@ -104,13 +109,16 @@ class TestBuildWorkspaceClient:
         
         _build_workspace_client(workspace)
         
-        mock_client.assert_called_once_with(
+        mock_config_cls.assert_called_once_with(
             host="https://test.databricks.com",
-            token="test-token"
+            token="test-token",
+            http_timeout_seconds=_HTTP_TIMEOUT_SECONDS,
         )
+        mock_client.assert_called_once_with(config=mock_config_cls.return_value)
     
     @patch('lakeventory.setup_wizard.WorkspaceClient')
-    def test_build_client_with_service_principal(self, mock_client):
+    @patch('lakeventory.setup_wizard.DatabricksConfig')
+    def test_build_client_with_service_principal(self, mock_config_cls, mock_client):
         """Test building client with Service Principal authentication."""
         workspace = WorkspaceConfig(
             name="test",
@@ -123,14 +131,17 @@ class TestBuildWorkspaceClient:
         
         _build_workspace_client(workspace)
         
-        mock_client.assert_called_once_with(
+        mock_config_cls.assert_called_once_with(
             host="https://test.databricks.com",
             client_id="client-123",
-            client_secret="secret-456"
+            client_secret="secret-456",
+            http_timeout_seconds=_HTTP_TIMEOUT_SECONDS,
         )
+        mock_client.assert_called_once_with(config=mock_config_cls.return_value)
     
     @patch('lakeventory.setup_wizard.WorkspaceClient')
-    def test_build_client_defaults_to_pat(self, mock_client):
+    @patch('lakeventory.setup_wizard.DatabricksConfig')
+    def test_build_client_defaults_to_pat(self, mock_config_cls, mock_client):
         """Test that unknown auth method defaults to PAT."""
         workspace = WorkspaceConfig(
             name="test",
@@ -142,10 +153,25 @@ class TestBuildWorkspaceClient:
         _build_workspace_client(workspace)
         
         # Should default to PAT behavior
-        mock_client.assert_called_once_with(
+        mock_config_cls.assert_called_once_with(
             host="https://test.databricks.com",
+            token="test-token",
+            http_timeout_seconds=_HTTP_TIMEOUT_SECONDS,
+        )
+        mock_client.assert_called_once_with(config=mock_config_cls.return_value)
+    
+    def test_build_client_sets_http_timeout(self):
+        """Test that the built client has the expected HTTP timeout."""
+        workspace = WorkspaceConfig(
+            name="test",
+            host="https://test.databricks.com",
+            auth_method="pat",
             token="test-token"
         )
+        
+        client = _build_workspace_client(workspace)
+        
+        assert client.config.http_timeout_seconds == _HTTP_TIMEOUT_SECONDS
 
 
 class TestReadSecret:
@@ -268,6 +294,32 @@ class TestConnectionTest:
         result = test_connection(workspace)
         
         assert result is None
+
+    @patch('lakeventory.setup_wizard._build_workspace_client')
+    def test_connection_test_timeout(self, mock_build_client, capsys):
+        """Test that connection test returns None and prints error when timed out."""
+        from lakeventory.setup_wizard import test_connection
+
+        # Simulate a slow connection that exceeds the timeout
+        def _slow_connect(workspace):
+            time.sleep(60)  # much longer than any timeout
+
+        mock_build_client.side_effect = _slow_connect
+
+        workspace = WorkspaceConfig(
+            name="test",
+            host="https://invalid-host.example.com",
+            auth_method="pat",
+            token="dummy-token",
+        )
+
+        # Patch the timeout constant to a very short value so the test runs fast
+        with patch('lakeventory.setup_wizard._CONNECTION_TIMEOUT_SECONDS', 1):
+            result = test_connection(workspace)
+
+        assert result is None
+        captured = capsys.readouterr()
+        assert "timed out" in captured.out.lower()
 
 
 class TestIntegrationScenarios:
