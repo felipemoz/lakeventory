@@ -71,53 +71,20 @@ def test_build_workspace_client_explicit_timeout(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("DATABRICKS_TOKEN", "tok")
     monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
     monkeypatch.delenv("DATABRICKS_CLIENT_SECRET", raising=False)
-    monkeypatch.delenv("DATABRICKS_HTTP_TIMEOUT_SECONDS", raising=False)
 
     wc = build_workspace_client(tmp_path, http_timeout_seconds=600)
 
     assert wc.config.kwargs["http_timeout_seconds"] == 600
 
 
-def test_build_workspace_client_timeout_from_env(monkeypatch, tmp_path: Path):
-    """DATABRICKS_HTTP_TIMEOUT_SECONDS env var is used when no explicit timeout."""
-    monkeypatch.setattr(client_module, "WorkspaceClient", FakeWorkspaceClient)
-    monkeypatch.setattr(client_module, "DatabricksConfig", FakeConfig)
-    monkeypatch.setenv("DATABRICKS_HOST", "https://example")
-    monkeypatch.setenv("DATABRICKS_TOKEN", "tok")
-    monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
-    monkeypatch.delenv("DATABRICKS_CLIENT_SECRET", raising=False)
-    monkeypatch.setenv("DATABRICKS_HTTP_TIMEOUT_SECONDS", "300")
-
-    wc = build_workspace_client(tmp_path)
-
-    assert wc.config.kwargs["http_timeout_seconds"] == 300
-
-
-def test_build_workspace_client_invalid_env_timeout(monkeypatch, tmp_path: Path):
-    """Invalid DATABRICKS_HTTP_TIMEOUT_SECONDS is ignored (no crash)."""
-    monkeypatch.setattr(client_module, "WorkspaceClient", FakeWorkspaceClient)
-    monkeypatch.setattr(client_module, "DatabricksConfig", FakeConfig)
-    monkeypatch.setenv("DATABRICKS_HOST", "https://example")
-    monkeypatch.setenv("DATABRICKS_TOKEN", "tok")
-    monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
-    monkeypatch.delenv("DATABRICKS_CLIENT_SECRET", raising=False)
-    monkeypatch.setenv("DATABRICKS_HTTP_TIMEOUT_SECONDS", "not-a-number")
-
-    wc = build_workspace_client(tmp_path)
-
-    # Should fall back to None (SDK default)
-    assert wc.config.kwargs["http_timeout_seconds"] is None
-
-
 def test_build_workspace_client_no_timeout_by_default(monkeypatch, tmp_path: Path):
-    """Without any timeout setting, http_timeout_seconds is None (SDK default)."""
+    """Without an explicit timeout, http_timeout_seconds is None (SDK default)."""
     monkeypatch.setattr(client_module, "WorkspaceClient", FakeWorkspaceClient)
     monkeypatch.setattr(client_module, "DatabricksConfig", FakeConfig)
     monkeypatch.setenv("DATABRICKS_HOST", "https://example")
     monkeypatch.setenv("DATABRICKS_TOKEN", "tok")
     monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
     monkeypatch.delenv("DATABRICKS_CLIENT_SECRET", raising=False)
-    monkeypatch.delenv("DATABRICKS_HTTP_TIMEOUT_SECONDS", raising=False)
 
     wc = build_workspace_client(tmp_path)
 

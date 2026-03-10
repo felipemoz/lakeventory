@@ -27,8 +27,9 @@ def build_workspace_client(root: Path, http_timeout_seconds: Optional[int] = Non
 
     Args:
         root: Unused; kept for call-site compatibility.
-        http_timeout_seconds: Per-request HTTP timeout in seconds.  Reads from
-            the ``DATABRICKS_HTTP_TIMEOUT_SECONDS`` env var when not provided.
+        http_timeout_seconds: Per-request HTTP timeout in seconds passed
+            through from ``global_config.http_timeout_seconds`` in
+            ``.lakeventory/config.yaml`` (or the ``--http-timeout`` CLI flag).
             ``None`` (the default) lets the Databricks SDK choose.  Increase
             this for large workspaces where collector calls (e.g.
             ``tables.list()``, ``users.list()``) can legitimately take several
@@ -50,19 +51,6 @@ def build_workspace_client(root: Path, http_timeout_seconds: Optional[int] = Non
     client_id = os.getenv("DATABRICKS_CLIENT_ID", "").strip()
     client_secret = os.getenv("DATABRICKS_CLIENT_SECRET", "").strip()
     token = os.getenv("DATABRICKS_TOKEN", "").strip()
-
-    # Resolve timeout: parameter → DATABRICKS_HTTP_TIMEOUT_SECONDS env var → None
-    if http_timeout_seconds is None:
-        env_val = os.getenv("DATABRICKS_HTTP_TIMEOUT_SECONDS", "").strip()
-        if env_val:
-            try:
-                http_timeout_seconds = int(env_val)
-            except ValueError:
-                logger.warning(
-                    "DATABRICKS_HTTP_TIMEOUT_SECONDS=%r is not a valid integer; "
-                    "ignoring timeout setting",
-                    env_val,
-                )
 
     if client_id and client_secret:
         logger.debug("Autenticando com Service Principal (client_id: %s...)", client_id[:8])

@@ -189,8 +189,7 @@ def main() -> int:
         metavar="SECONDS",
         help=(
             "Per-request HTTP timeout in seconds for Databricks SDK calls "
-            "(overrides global_config.http_timeout_seconds; "
-            "omit to use DATABRICKS_HTTP_TIMEOUT_SECONDS env var or SDK default). "
+            "(overrides global_config.http_timeout_seconds in config.yaml). "
             "Increase for large workspaces where collectors can take several minutes."
         ),
     )
