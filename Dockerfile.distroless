@@ -1,0 +1,57 @@
+# ============================================
+# Stage 1: Builder
+# ============================================
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies to a venv
+COPY requirements.txt ./
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY lakeventory ./lakeventory
+COPY setup.py pyproject.toml ./
+
+# Install application
+RUN /opt/venv/bin/pip install --no-cache-dir -e .
+
+# Cleanup unnecessary files
+RUN find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + && \
+    find /opt/venv -type f -name "*.pyc" -delete && \
+    find /opt/venv -type f -name "*.pyo" -delete
+
+# ============================================
+# Stage 2: Runtime (Distroless - Ultra Minimal)
+# ============================================
+FROM gcr.io/distroless/python3-debian12:nonroot AS runtime
+
+WORKDIR /app
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application files
+COPY --from=builder /build/lakeventory ./lakeventory
+COPY docs ./docs
+COPY README.md LICENSE* ./
+COPY scripts/run_scheduled.sh /app/run_scheduled.sh
+
+# Environment variables
+ENV PATH="/opt/venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Note: Distroless runs as nonroot by default (UID 65532)
+# Note: No shell available - cannot use chmod or complex ENTRYPOINT scripts
+
+ENTRYPOINT ["python", "-m", "lakeventory.cli"]
+CMD ["collect", "--out", "report.md"]

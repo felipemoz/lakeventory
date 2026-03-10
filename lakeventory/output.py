@@ -193,3 +193,50 @@ def write_delta_excel(
     
     wb.save(out_path)
 
+
+def load_findings_from_file(file_path: Path) -> List[Dict]:
+    """Load findings from markdown or JSON file for comparison.
+    
+    Args:
+        file_path: Path to inventory file
+        
+    Returns:
+        List of findings as dictionaries
+    """
+    import json
+    
+    findings = []
+    
+    if file_path.suffix == ".json":
+        with open(file_path, "r") as f:
+            findings = json.load(f)
+    elif file_path.suffix in [".md", ".markdown"]:
+        # Simple markdown parser - extract findings section
+        with open(file_path, "r") as f:
+            content = f.read()
+            
+        # Look for findings in markdown format
+        in_findings = False
+        for line in content.split("\n"):
+            if line.startswith("## Findings"):
+                in_findings = True
+                continue
+            if in_findings and line.startswith("## "):
+                break
+            if in_findings and line.startswith("- ["):
+                # Parse line like: - [kind] path (notes) | ...
+                try:
+                    kind_end = line.index("]")
+                    kind = line[3:kind_end]
+                    rest = line[kind_end + 2:]
+                    
+                    findings.append({
+                        "kind": kind,
+                        "name": rest.split("(")[0].strip() if "(" in rest else rest,
+                        "raw": line,
+                    })
+                except (ValueError, IndexError):
+                    continue
+    
+    return findings
+

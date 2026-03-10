@@ -2,24 +2,87 @@
 
 Automated discovery and inventory of Databricks workspace assets and dependencies. Exports to Markdown or Excel with cloud provider detection and workspace ID auto-sensing.
 
-## Quick Start
+## Installation
+
+### Option 1: Install as CLI (Recommended)
+
+```bash
+# Clone repository
+git clone https://github.com/felipemoz/lakeventory.git
+cd lakeventory
+
+# Install CLI
+pip install -e .
+
+# Use directly
+lakeventory --version
+lakeventory collect --out report.md
+```
+
+### Option 2: Use without Installation
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run basic inventory
+# Run with Python module
 python -m lakeventory --source sdk --out report.md
+```
+
+### Option 3: Standalone Executable
+
+```bash
+# Build executable (no Python required on target machine)
+make build-exe
+
+# Run
+./dist/lakeventory version
+./dist/lakeventory collect --out report.md
+```
+
+---
+
+## Quick Start
+
+```bash
+# Using CLI (after pip install -e .)
+lakeventory collect --out report.md
 
 # Or with Excel output
-python -m lakeventory --source sdk --out-xlsx report.xlsx
+lakeventory collect --out report.md --out-xlsx report.xlsx
+
+# Legacy method (still works)
+python -m lakeventory --source sdk --out report.md
 ```
 
 **Via Makefile:**
 ```bash
 make check       # Verify setup
+make install-cli # Install CLI command
 make inventory   # Generate report
 ```
+
+---
+
+## CLI Commands
+
+The new CLI provides enhanced commands with better organization:
+
+```bash
+# Main commands
+lakeventory collect         # Run inventory collection
+lakeventory cache list      # List cached snapshots
+lakeventory cache clear     # Clear cache
+lakeventory diff            # Compare two inventories
+lakeventory version         # Show version info
+
+# Examples
+lakeventory collect --incremental --out changes.md
+lakeventory cache list
+lakeventory diff --baseline old.md --current new.md --verbose
+```
+
+See [docs/CLI.md](docs/CLI.md) for complete CLI documentation.
 
 ---
 
@@ -43,6 +106,7 @@ make inventory   # Generate report
 | Topic | Link |
 |-------|------|
 | **Getting Started** | [Quick Start Guide](#quick-start) |
+| **CLI Commands** | [docs/CLI.md](docs/CLI.md) |
 | **Authentication** | [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) |
 | **Permissions** | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
 | **Usage Examples** | [docs/USAGE.md](docs/USAGE.md) |

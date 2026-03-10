@@ -1,10 +1,13 @@
-.PHONY: help install install-dev test check \
+.PHONY: help install install-dev install-cli test check \
 	inventory inventory-basic inventory-batch inventory-serverless inventory-no-progress \
 	inventory-debug inventory-error inventory-verbose \
 	inventory-selective inventory-full inventory-incremental \
 	inventory-all-workspaces \
 	inventory-validate \
-	cache-clear cache-info
+	cache-clear cache-info cache-list \
+	build-exe cli-help cli-version \
+	docker-build docker-build-all docker-test docker-push \
+	publish-test publish
 
 PYTHON ?= python3
 OUT ?= report.md
@@ -22,7 +25,26 @@ LOG_LEVEL ?= info
 
 help:
 	@echo "Available targets:"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make install                # install dependencies"
+	@echo "  make install-dev            # install dev dependencies"
+	@echo "  make install-cli            # install CLI (pip install -e .)"
+	@echo "  make test                   # run tests"
 	@echo "  make check                  # health check (dependencies, auth, workspace)"
+	@echo ""
+	@echo "CLI Commands (new):"
+	@echo "  make cli-help               # show CLI help"
+	@echo "  make cli-version            # show version"
+	@echo "  make build-exe              # build standalone executable"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-build           # build default alpine image"
+	@echo "  make docker-build-all       # build all variants (alpine, distroless, static)"
+	@echo "  make docker-test            # test docker image"
+	@echo "  make docker-push            # push to registry"
+	@echo ""
+	@echo "Inventory:"
 	@echo "  make inventory              # default run (respects BATCH_SIZE/BATCH_SLEEP_MS/SERVERLESS)"
 	@echo "  make inventory-basic        # basic run with default options"
 	@echo "  make inventory-batch        # run with explicit batching"
@@ -36,6 +58,9 @@ help:
 	@echo "  make inventory-selective    # selected collectors only"
 	@echo "  make inventory-full         # heavy collectors enabled"
 	@echo "  make inventory-all-workspaces   # run inventory across all configured workspaces"
+	@echo ""
+	@echo "Cache:"
+	@echo "  make cache-list             # list cached snapshots"
 	@echo "  make cache-info             # show cache snapshot info"
 	@echo "  make cache-clear            # clear cache snapshots"
 	@echo ""
@@ -173,9 +198,105 @@ inventory-incremental:
 cache-info:
 	$(PYTHON) -c "from lakeventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); info = c.get_cache_info(); print(f'Cache dir: {info[\"cache_dir\"]}'); print(f'Snapshots: {info[\"total_snapshots\"]}'); [print(f'  - {s}') for s in info['snapshots']]"
 
+cache-list:
+	@echo "Listing cached snapshots..."
+	@lakeventory cache list 2>/dev/null || $(PYTHON) -m lakeventory.cli cache list
+
 cache-clear:
 	@echo "Clearing inventory cache..."
 	$(PYTHON) -c "from lakeventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); deleted = c.clear_cache(); print(f'Deleted {deleted} snapshot files')"
+
+install-cli:
+	@echo "Installing Lakeventory CLI..."
+	pip install -e .
+	@echo ""
+	@echo "✓ CLI installed! Try:"
+	@echo "  lakeventory --version"
+	@echo "  lakeventory collect --help"
+
+cli-help:
+	@lakeventory --help 2>/dev/null || $(PYTHON) -m lakeventory.cli --help
+
+cli-version:
+	@lakeventory version 2>/dev/null || $(PYTHON) -m lakeventory.cli version
+
+build-exe:
+	@echo "Building standalone executable..."
+	@bash scripts/build_executable.sh
+
+publish-test:
+	@echo "Publishing to TestPyPI..."
+	$(PYTHON) -m build
+	$(PYTHON) -m twine upload --repository testpypi dist/*
+
+publish:
+	@echo "Publishing to PyPI..."
+	$(PYTHON) -m build
+	$(PYTHON) -m twine upload dist/*
+
+# Docker targets
+DOCKER_IMAGE ?= lakeventory
+DOCKER_TAG ?= latest
+DOCKER_REGISTRY ?= ghcr.io
+DOCKER_REPO ?= felipemoz/lakeventory
+
+docker-build:
+	@echo "Building Docker image (alpine multi-stage)..."
+	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	docker build -t $(DOCKER_IMAGE):alpine .
+	@echo ""
+	@echo "✓ Built: $(DOCKER_IMAGE):$(DOCKER_TAG)"
+	@docker images $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+docker-build-distroless:
+	@echo "Building Docker image (distroless)..."
+	docker build -f Dockerfile.distroless -t $(DOCKER_IMAGE):distroless .
+	@echo ""
+	@echo "✓ Built: $(DOCKER_IMAGE):distroless"
+	@docker images $(DOCKER_IMAGE):distroless
+
+docker-build-static:
+	@echo "Building Docker image (static binary)..."
+	docker build -f Dockerfile.static -t $(DOCKER_IMAGE):static .
+	@echo ""
+	@echo "✓ Built: $(DOCKER_IMAGE):static"
+	@docker images $(DOCKER_IMAGE):static
+
+docker-build-all: docker-build docker-build-distroless docker-build-static
+	@echo ""
+	@echo "All Docker images built:"
+	@docker images $(DOCKER_IMAGE)
+
+docker-test:
+	@echo "Testing Docker image..."
+	docker run --rm $(DOCKER_IMAGE):$(DOCKER_TAG) python -c "import lakeventory; print(f'Lakeventory {lakeventory.__version__}')"
+	@echo "✓ Docker image works!"
+
+docker-run:
+	@echo "Running Docker container (one-time inventory)..."
+	docker run --rm \
+		-e DATABRICKS_HOST \
+		-e DATABRICKS_TOKEN \
+		-v $(PWD)/output:/app/output \
+		$(DOCKER_IMAGE):$(DOCKER_TAG) collect --out report.md
+
+docker-run-interactive:
+	@echo "Running Docker container (interactive)..."
+	docker run --rm -it \
+		-e DATABRICKS_HOST \
+		-e DATABRICKS_TOKEN \
+		-v $(PWD)/output:/app/output \
+		$(DOCKER_IMAGE):$(DOCKER_TAG) sh
+
+docker-push:
+	@echo "Pushing to registry..."
+	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_REGISTRY)/$(DOCKER_REPO):$(DOCKER_TAG)
+	docker push $(DOCKER_REGISTRY)/$(DOCKER_REPO):$(DOCKER_TAG)
+	@echo "✓ Pushed: $(DOCKER_REGISTRY)/$(DOCKER_REPO):$(DOCKER_TAG)"
+
+docker-size:
+	@echo "Docker image sizes:"
+	@docker images $(DOCKER_IMAGE) --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
 inventory-all-workspaces:
 	@echo "Running inventory across all configured workspaces ($(WORKSPACES_CONFIG))..."
