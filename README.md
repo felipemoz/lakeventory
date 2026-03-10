@@ -229,15 +229,17 @@ Reports include:
 - Excel sheets (default) for easy browsing and filtering
 
 ### Single Workspace
-Files are automatically timestamped and include workspace ID:
+Files are timestamped automatically and include workspace ID.
+The base directory comes from `output_dir` in `.lakeventory/config.yaml`
+(default: `./output` if not overridden):
 ```
-output/workspace_1234567_20260309_1549.xlsx
+<output_dir>/workspace_1234567_20260309_1549.xlsx
 ```
 
 ### Multi-Workspace
-Organized by workspace name:
+Organized by workspace name, using `global_config.output_dir` or workspace-specific `output_dir`:
 ```
-output/
+<output_dir>/
 ├── prod/
 │   ├── workspace_3456789_20260309_1549.xlsx
 │   └── .inventory_cache/
@@ -248,6 +250,7 @@ output/
 ```
 
 **Default format:** XLSX (Excel) — configurable per workspace or globally
+**Output directory:** configurable via YAML `output_dir` (global and/or per-workspace)
 
 ---
 
@@ -303,7 +306,7 @@ pytest -q
 | Selective collectors | ✅ Complete |
 | Serverless mode | ✅ Complete |
 | Permission validation | ✅ Complete |
-| Testing (42 tests) | ✅ Complete |
+| Testing (89 tests) | ✅ Complete |
 
 ---
 

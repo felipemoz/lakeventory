@@ -132,9 +132,9 @@ workspaces:
     output_dir: /mnt/reports  # Custom: /mnt/reports/staging/
 ```
 
-Output structure:
+Output structure (resolved from YAML `output_dir`):
 ```
-output/
+<output_dir>/
 ├── prod/
 │   ├── workspace_3456789_20260309_1549.xlsx
 │   └── .inventory_cache/
@@ -163,8 +163,8 @@ python -m lakeventory \
 
 Files are automatically timestamped and include workspace ID:
 ```
-output/workspace_1234567_20260309_1549.xlsx
-output/workspace_1234567_20260309_1549.md  # if markdown format
+<output_dir>/workspace_1234567_20260309_1549.xlsx
+<output_dir>/workspace_1234567_20260309_1549.md  # if markdown format
 ```
 
 **Change format:**
