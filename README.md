@@ -1,43 +1,92 @@
 # Lakeventory
 
-Automated discovery and inventory of Databricks workspace assets and dependencies. Supports **multi-workspace management** with interactive setup wizard. Exports to Excel (default), Markdown, or JSON with cloud provider detection and workspace ID auto-sensing.
+[![Docker Publish](https://github.com/felipemoz/lakeventory/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/felipemoz/lakeventory/actions/workflows/docker-publish.yml)
+[![Python Publish](https://github.com/felipemoz/lakeventory/actions/workflows/python-publish.yml/badge.svg)](https://github.com/felipemoz/lakeventory/actions/workflows/python-publish.yml)
 
-## Quick Start
+Automated discovery and inventory of Databricks workspace assets and dependencies. Exports to Markdown or Excel with cloud provider detection and workspace ID auto-sensing.
+
+## Installation
+
+### Option 1: Install as CLI (Recommended)
+
+```bash
+# Clone repository
+git clone https://github.com/felipemoz/lakeventory.git
+cd lakeventory
+
+# Install CLI
+pip install -e .
+
+# Use directly
+lakeventory --version
+lakeventory collect --out report.md
+```
+
+### Option 2: Use without Installation
 
 ### Single Workspace (Legacy)
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run basic inventory (exports to Excel by default)
-python -m lakeventory --source sdk
-
-# Or with Markdown output
+# Run with Python module
 python -m lakeventory --source sdk --out report.md
 ```
 
-### Multi-Workspace (Recommended)
+### Option 3: Standalone Executable
+
 ```bash
-# Interactive setup wizard
-make setup
-# or: python -m lakeventory setup
+# Build executable (no Python required on target machine)
+make build-exe
 
-# List configured workspaces
-make list-workspaces
+# Run
+./dist/lakeventory version
+./dist/lakeventory collect --out report.md
+```
 
-# Run on specific workspace
-make inventory-workspace WORKSPACE=prod
+---
 
-# Run on all workspaces
-make inventory-all
+## Quick Start
+
+```bash
+# Using CLI (after pip install -e .)
+lakeventory collect --out report.md
+
+# Or with Excel output
+lakeventory collect --out report.md --out-xlsx report.xlsx
+
+# Legacy method (still works)
+python -m lakeventory --source sdk --out report.md
 ```
 
 **Via Makefile:**
 ```bash
 make check       # Verify setup
-make setup       # Interactive workspace configuration
-make inventory   # Generate report (default workspace)
+make install-cli # Install CLI command
+make inventory   # Generate report
 ```
+
+---
+
+## CLI Commands
+
+The new CLI provides enhanced commands with better organization:
+
+```bash
+# Main commands
+lakeventory collect         # Run inventory collection
+lakeventory cache list      # List cached snapshots
+lakeventory cache clear     # Clear cache
+lakeventory diff            # Compare two inventories
+lakeventory version         # Show version info
+
+# Examples
+lakeventory collect --incremental --out changes.md
+lakeventory cache list
+lakeventory diff --baseline old.md --current new.md --verbose
+```
+
+See [docs/CLI.md](docs/CLI.md) for complete CLI documentation.
 
 ---
 
@@ -61,11 +110,19 @@ make inventory   # Generate report (default workspace)
 | Topic | Link |
 |-------|------|
 | **Getting Started** | [Quick Start Guide](#quick-start) |
-| **Multi-Workspace Setup** | [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md) ✨ **NEW** |
+| **CLI Commands** | [docs/CLI.md](docs/CLI.md) |
 | **Authentication** | [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) |
 | **Permissions** | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
 | **Usage Examples** | [docs/USAGE.md](docs/USAGE.md) |
 | **Troubleshooting** | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
+
+---
+
+## CI/CD Status
+
+The badges above reflect the current pipeline status:
+- Docker image build and publish (alpine, distroless, static)
+- Python package build and publish (PyPI)
 
 ---
 

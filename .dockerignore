@@ -1,0 +1,99 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Testing
+.pytest_cache/
+.cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.cover
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Documentation (build includes only README, LICENSE, CONTRIBUTORS)
+docs/*.md
+!docs/README.md
+*.md
+!README.md
+!LICENSE
+!CONTRIBUTORS.md
+
+# Build artifacts
+dist/
+build/
+*.spec
+!lakeventory.spec
+scripts/build_executable.sh
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Environment
+.env
+.env.*
+*.env
+
+# Output
+output/
+.reports/
+*.xlsx
+*.xls
+*.md
+!README.md
+
+# Docker
+Dockerfile.*
+!Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Misc
+*.log
+*.bak
+*.tmp
+.cache/
+billing/
+architecture_session_regdata/
+dumps_repos/
+scripts/analyze_aws_billing.py
+DATABRICKS_COMMUNITY_POST.md
+CLI_IMPLEMENTATION.md
+INSTALL.md

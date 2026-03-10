@@ -1,0 +1,78 @@
+# ============================================
+# Stage 1: Builder with PyInstaller (Alpine for musl consistency)
+# ============================================
+FROM python:3.11-alpine AS builder
+
+WORKDIR /build
+
+# Install build dependencies and PyInstaller
+RUN apk add --no-cache \
+    gcc \
+    g++ \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    binutils \
+    upx \
+    cargo \
+    rust
+
+# Copy requirements and install
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --no-binary cryptography -r requirements.txt pyinstaller
+
+# Copy application code
+COPY lakeventory ./lakeventory
+COPY setup.py pyproject.toml lakeventory.spec ./
+COPY README.md LICENSE ./
+
+# Build standalone executable
+RUN pyinstaller lakeventory.spec && \
+    strip dist/lakeventory && \
+    upx --best --lzma dist/lakeventory || true
+
+# ============================================
+# Stage 2: Scratch (Minimal - Static Binary)
+# ============================================
+FROM scratch AS runtime
+
+WORKDIR /app
+
+# Copy only the executable and required files
+COPY --from=builder /build/dist/lakeventory /app/lakeventory
+COPY --from=builder /build/README.md /build/LICENSE /app/
+
+# Note: scratch has NO shell, NO libc, NOTHING
+# This only works if lakeventory is truly statically linked
+# In practice, Python executables need glibc, so this won't work
+
+# Use alpine base instead (edge version for better musl compatibility)
+# ============================================
+FROM alpine:edge AS runtime-alpine
+
+# Install minimal runtime dependencies
+RUN apk add --no-cache \
+    libstdc++ \
+    libgcc \
+    gcompat
+
+WORKDIR /app
+
+# Copy executable from builder
+COPY --from=builder /build/dist/lakeventory /app/lakeventory
+
+# Non-root user
+RUN addgroup -g 1000 lakeventory && \
+    adduser -D -u 1000 -G lakeventory lakeventory && \
+    chown -R lakeventory:lakeventory /app && \
+    chmod +x /app/lakeventory
+
+USER lakeventory
+
+ENTRYPOINT ["/app/lakeventory"]
+CMD ["collect", "--out", "report.md"]
+
+# ============================================
+# This is the recommended runtime target
+# ============================================
+FROM runtime-alpine

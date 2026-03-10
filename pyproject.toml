@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lakeventory"
+version = "1.0.0"
+description = "Automated discovery and inventory of Databricks workspace assets"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Felipe Moz", email = "felipe@example.com"}
+]
+keywords = ["databricks", "inventory", "audit", "compliance", "asset-discovery"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "databricks-sdk",
+    "openpyxl",
+    "pyyaml",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+]
+
+[project.urls]
+Homepage = "https://github.com/felipemoz/lakeventory"
+Documentation = "https://github.com/felipemoz/lakeventory/tree/main/docs"
+Repository = "https://github.com/felipemoz/lakeventory"
+Issues = "https://github.com/felipemoz/lakeventory/issues"
+
+[project.scripts]
+lakeventory = "lakeventory.cli:main"
+
+[tool.setuptools]
+packages = ["lakeventory"]
+
+[tool.setuptools.package-data]
+lakeventory = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
