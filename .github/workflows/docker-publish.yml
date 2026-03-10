@@ -39,12 +39,15 @@ jobs:
           - name: alpine
             dockerfile: Dockerfile
             tags: "latest,alpine"
+            scan_tag: alpine
           - name: distroless
             dockerfile: Dockerfile.distroless
             tags: "distroless"
+            scan_tag: distroless
           - name: static
             dockerfile: Dockerfile.static
             tags: "static"
+            scan_tag: static
 
     steps:
       - name: Checkout
@@ -60,6 +63,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push
+        id: build
         shell: bash
         run: |
           IFS="," read -ra TAGS <<< "${{ matrix.tags }}"
@@ -69,8 +73,32 @@ jobs:
             TAG_ARGS+=" --tag ${IMAGE_NAME}:${TAG}-${GITHUB_SHA}"
           done
 
+          SCAN_REF="${IMAGE_NAME}:${{ matrix.scan_tag }}-${GITHUB_SHA}"
+
           docker buildx build \
             --file "${{ matrix.dockerfile }}" \
             ${TAG_ARGS} \
             --push \
             .
+
+          echo "scan_ref=${SCAN_REF}" >> "$GITHUB_OUTPUT"
+
+      - name: Vulnerability scan (report)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ steps.build.outputs.scan_ref }}
+          format: table
+          exit-code: "0"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+      - name: Vulnerability gate (CRITICAL)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ steps.build.outputs.scan_ref }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL
