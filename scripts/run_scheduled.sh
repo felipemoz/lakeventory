@@ -2,16 +2,34 @@
 set -e
 
 interval_minutes=${RUN_INTERVAL_MINUTES:-1440}
-output_dir=${OUTPUT_DIR:-/app/output}
+output_dir=${OUTPUT_DIR:-/data}
 out_file=${OUT:-report.md}
-log_level=${LOG_LEVEL:-info}
+log_level=${LOG_LEVEL:-}
 batch_size=${BATCH_SIZE:-200}
 batch_sleep_ms=${BATCH_SLEEP_MS:-0}
-cache_dir=${CACHE_DIR:-/app/.inventory_cache}
+cache_dir=${CACHE_DIR:-/cache}
 incremental_after_first=${INCREMENTAL_AFTER_FIRST:-1}
 force_full=${FORCE_FULL:-0}
 
-args="--source sdk --out ${out_file} --log-level ${log_level} --batch-size ${batch_size} --batch-sleep-ms ${batch_sleep_ms}"
+args="--source sdk"
+
+if [ -n "${OUT}" ]; then
+  args="$args --out ${out_file}"
+fi
+
+if [ -n "${LOG_LEVEL}" ]; then
+  args="$args --log-level ${log_level}"
+fi
+
+# Passa parâmetros opcionais apenas se definidos explicitamente via env var
+# (caso omitidos, o config.yaml do workspace define os defaults)
+if [ -n "${BATCH_SIZE}" ]; then
+  args="$args --batch-size ${batch_size}"
+fi
+
+if [ -n "${BATCH_SLEEP_MS}" ] && [ "${BATCH_SLEEP_MS}" != "0" ]; then
+  args="$args --batch-sleep-ms ${batch_sleep_ms}"
+fi
 
 if [ -n "${OUTPUT_DIR}" ]; then
   args="$args --out-dir ${output_dir}"

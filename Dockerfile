@@ -70,4 +70,8 @@ RUN addgroup -g 1000 lakeventory && \
 
 USER lakeventory
 
+# Monte .lakeventory/config.yaml aqui em runtime:
+#   docker run -v $(pwd)/.lakeventory:/app/.lakeventory:ro ...
+VOLUME /app/.lakeventory
+
 ENTRYPOINT ["/app/run_scheduled.sh"]

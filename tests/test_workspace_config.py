@@ -107,11 +107,14 @@ class TestGlobalConfig:
         
         assert config.output_dir == "./output"
         assert config.output_format == "xlsx"
+        assert config.log_level == "info"
         assert config.batch_size == 200
         assert config.batch_sleep_ms == 50
         assert config.include_runs is False
         assert config.include_query_history is False
         assert config.include_dbfs is False
+        assert config.backup_workspace is False
+        assert config.backup_output_dir == ""
         assert len(config.enabled_collectors) > 0
     
     def test_custom_values(self):
@@ -119,13 +122,19 @@ class TestGlobalConfig:
         config = GlobalConfig(
             output_dir="/custom/output",
             output_format="markdown",
+            log_level="debug",
             batch_size=100,
-            include_runs=True
+            include_runs=True,
+            backup_workspace=True,
+            backup_output_dir="/tmp/backups",
         )
         
         assert config.output_dir == "/custom/output"
         assert config.output_format == "markdown"
+        assert config.log_level == "debug"
         assert config.batch_size == 100
+        assert config.backup_workspace is True
+        assert config.backup_output_dir == "/tmp/backups"
         assert config.include_runs is True
 
 
@@ -307,29 +316,21 @@ class TestConfigManager:
         assert "test" in loaded.workspaces
         assert loaded.workspaces["test"].token == "test-token"
     
-    def test_migrate_from_env(self, tmp_path: Path, monkeypatch):
-        """Test migration from .env file."""
+    def test_load_ignores_env_without_config(self, tmp_path: Path, monkeypatch):
+        """Sem config.yaml, não migra automaticamente de .env."""
         monkeypatch.chdir(tmp_path)
-        
-        # Create .env file
+
         env_path = tmp_path / ".env"
         env_path.write_text("""
 DATABRICKS_HOST=https://migrated.databricks.com
 DATABRICKS_TOKEN=migrated-token
 """.strip())
-        
+
         manager = ConfigManager()
         config = manager.load()
-        
-        # Should have migrated workspace
-        assert "default" in config.workspaces
-        assert config.workspaces["default"].host == "https://migrated.databricks.com"
-        assert config.workspaces["default"].token == "migrated-token"
-        assert config.workspaces["default"].description == "Migrated from .env"
-        assert config.default_workspace == "default"
-        
-        # Global config should have default output_dir (migration doesn't read OUTPUT_DIR)
-        assert config.global_config.output_dir == "./output"
+
+        assert len(config.workspaces) == 0
+        assert config.default_workspace is None
     
     def test_apply_workspace_env(self, tmp_path: Path, monkeypatch):
         """Test applying workspace environment variables."""
@@ -349,32 +350,8 @@ DATABRICKS_TOKEN=migrated-token
         assert os.environ.get("DATABRICKS_HOST") == "https://test.databricks.com"
         assert os.environ.get("DATABRICKS_TOKEN") == "applied-token"
     
-    def test_migrate_from_env_service_principal(self, tmp_path: Path, monkeypatch):
-        """Test migration from .env with Service Principal."""
-        monkeypatch.chdir(tmp_path)
-        
-        # Create .env with Service Principal
-        env_path = tmp_path / ".env"
-        env_path.write_text("""
-DATABRICKS_HOST=https://sp.databricks.com
-DATABRICKS_CLIENT_ID=client-123
-DATABRICKS_CLIENT_SECRET=secret-456
-ARM_TENANT_ID=tenant-789
-""".strip())
-        
-        manager = ConfigManager()
-        config = manager.load()
-        
-        # Should have migrated as Service Principal
-        assert "default" in config.workspaces
-        ws = config.workspaces["default"]
-        assert ws.auth_method == "service_principal"
-        assert ws.client_id == "client-123"
-        assert ws.client_secret == "secret-456"
-        assert ws.tenant_id == "tenant-789"
-    
-    def test_no_migration_if_config_exists(self, tmp_path: Path, monkeypatch):
-        """Test that .env is not migrated if config already exists."""
+    def test_existing_config_is_loaded_even_with_env_file(self, tmp_path: Path, monkeypatch):
+        """Com config.yaml existente, o load preserva config e ignora .env."""
         monkeypatch.chdir(tmp_path)
         
         # Create existing config

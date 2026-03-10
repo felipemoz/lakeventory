@@ -113,6 +113,7 @@ See [docs/CLI.md](docs/CLI.md) for complete CLI documentation.
 | **CLI Commands** | [docs/CLI.md](docs/CLI.md) |
 | **Authentication** | [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) |
 | **Permissions** | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
+| **Workspace Backup** | [docs/BACKUP.md](docs/BACKUP.md) |
 | **Usage Examples** | [docs/USAGE.md](docs/USAGE.md) |
 | **Troubleshooting** | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 
@@ -155,17 +156,22 @@ Configuration is stored in `.lakeventory/config.yaml` with support for:
 
 **See [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md)** for complete guide.
 
-### Option 2: Single Workspace (Legacy)
+### Option 2: Single Workspace
 
-Create `.env` file for single workspace:
+Use o mesmo wizard — ele cria um único workspace `default`:
 
-```env
-DATABRICKS_HOST=https://<workspace-host>
-DATABRICKS_TOKEN=<your-pat-token>
-OUTPUT_DIR=./output
+```bash
+make setup
 ```
 
-**See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** for other auth methods (Service Principal).
+Ou copie o template e edite manualmente:
+
+```bash
+cp .lakeventory/config.yaml.example .lakeventory/config.yaml
+# Edite com host e token/SP
+```
+
+**See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** for auth methods (PAT, Service Principal).
 
 ---
 

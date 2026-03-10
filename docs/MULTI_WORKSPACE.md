@@ -200,19 +200,16 @@ make inventory-workspace WORKSPACE=serverless SERVERLESS=1
 make inventory-all SERVERLESS=1
 ```
 
-## Migration from .env
+## Migração de configuração anterior
 
-If you have an existing `.env` file, the setup wizard will offer to migrate it automatically:
+Se você usava variáveis de ambiente (método legado), execute o wizard:
 
 ```bash
-$ make setup
-
-📋 Found existing .env configuration
-Would you like to migrate to multi-workspace config? [Y/n]: Y
-
-✅ Migrated configuration as 'default' workspace
-   You can now add more workspaces!
+make setup
 ```
+
+O wizard interativo irá criar `.lakeventory/config.yaml` com seu workspace
+como entrada `default`.
 
 ## Advanced Usage
 
@@ -244,11 +241,10 @@ python -m lakeventory -w staging --log-level debug
 
 ### "No workspace specified and no default configured"
 
-**Solution:** Run `make setup` to configure at least one workspace, or set environment variables:
+**Solution:** Run `make setup` to configure at least one workspace (recommended), then run:
 
 ```bash
-export DATABRICKS_HOST=https://...
-export DATABRICKS_TOKEN=dapi...
+python -m lakeventory --list-workspaces
 python -m lakeventory
 ```
 

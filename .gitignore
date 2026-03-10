@@ -72,6 +72,8 @@ databricks_as_is.md
 databricks_as_is.xlsx
 databricks_full.md
 databricks_full.xlsx
+*.dbc
+*.zip
 *.md
 *.xlsx
 !README.md

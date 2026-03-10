@@ -2,16 +2,9 @@ services:
   lakeventory:
     build: .
     container_name: lakeventory
-    env_file:
-      - .env
+    # Credentials e configuração de workspaces vêm do config.yaml montado abaixo.
+    # Não use env_file nem variáveis DATABRICKS_* aqui — configure via .lakeventory/config.yaml
     environment:
-      # Required
-      DATABRICKS_HOST: ${DATABRICKS_HOST}
-      # Choose one auth method:
-      DATABRICKS_TOKEN: ${DATABRICKS_TOKEN:-}
-      DATABRICKS_CLIENT_ID: ${DATABRICKS_CLIENT_ID:-}
-      DATABRICKS_CLIENT_SECRET: ${DATABRICKS_CLIENT_SECRET:-}
-
       # Scheduling
       RUN_INTERVAL_MINUTES: ${RUN_INTERVAL_MINUTES:-1440}  # once per day
       INCREMENTAL_AFTER_FIRST: ${INCREMENTAL_AFTER_FIRST:-1}
@@ -34,6 +27,7 @@ services:
       COLLECTORS: ${COLLECTORS:-}
 
     volumes:
+      - ./.lakeventory:/app/.lakeventory:ro   # monta config.yaml com credenciais
       - lakeventory_output:/data
       - lakeventory_cache:/cache
 

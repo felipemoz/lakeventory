@@ -1,27 +1,30 @@
 .PHONY: help install install-dev install-cli test check \
-	inventory inventory-basic inventory-batch inventory-serverless inventory-no-progress \
+	inventory inventory-workspace inventory-all inventory-basic inventory-batch inventory-serverless inventory-no-progress \
 	inventory-debug inventory-error inventory-verbose \
 	inventory-selective inventory-full inventory-incremental \
-	inventory-all-workspaces \
+	inventory-backup inventory-all-backup inventory-all-workspaces \
 	inventory-validate \
+	setup list-workspaces \
 	cache-clear cache-info cache-list \
 	build-exe cli-help cli-version \
 	docker-build docker-build-all docker-test docker-push \
 	publish-test publish
 
 PYTHON ?= python3
-OUT ?= report.md
-OUT_XLSX ?= report.xlsx
-OUTPUT_DIR ?= ./.reports
-WORKSPACES_CONFIG ?= workspaces.yaml
-COLLECTORS ?= jobs,clusters,sql,mlflow,unity_catalog,repos,security,identities,serving,sharing,dbfs
-BATCH_SIZE ?= 200
-BATCH_SLEEP_MS ?= 0
+WORKSPACE ?=
+OUT ?=
+OUT_XLSX ?=
+OUTPUT_DIR ?=
+COLLECTORS ?=
+BATCH_SIZE ?=
+BATCH_SLEEP_MS ?=
 INCLUDE_RUNS ?= 0
 INCLUDE_QUERY_HISTORY ?= 0
 INCLUDE_DBFS ?= 0
 SERVERLESS ?= 0
-LOG_LEVEL ?= info
+LOG_LEVEL ?=
+BACKUP_WORKSPACE ?= 0
+BACKUP_OUT_DIR ?=
 
 help:
 	@echo "Available targets:"
@@ -31,7 +34,7 @@ help:
 	@echo "  make install-dev            # install dev dependencies"
 	@echo "  make install-cli            # install CLI (pip install -e .)"
 	@echo "  make test                   # run tests"
-	@echo "  make check                  # health check (dependencies, auth, workspace)"
+	@echo "  make check                  # health check usando config.yaml"
 	@echo ""
 	@echo "CLI Commands (new):"
 	@echo "  make cli-help               # show CLI help"
@@ -45,25 +48,27 @@ help:
 	@echo "  make docker-push            # push to registry"
 	@echo ""
 	@echo "Inventory:"
-	@echo "  make inventory              # default run (respects BATCH_SIZE/BATCH_SLEEP_MS/SERVERLESS)"
-		@echo "  make inventory-workspace    # run on specific workspace (WORKSPACE=name)"
-		@echo "  make inventory-all          # run on all configured workspaces"
+	@echo "  make inventory              # run no workspace default do config.yaml"
+	@echo "  make inventory-workspace    # run em um workspace específico (WORKSPACE=name)"
+	@echo "  make inventory-all          # run em todos os workspaces do config.yaml"
 	@echo "  make inventory-basic        # basic run with default options"
 	@echo "  make inventory-batch        # run with explicit batching"
 	@echo "  make inventory-serverless   # run serverless mode"
 	@echo "  make inventory-incremental  # delta mode using cache snapshots"
 	@echo "  make inventory-no-progress  # run with progress bars disabled"
 	@echo "  make inventory-validate     # validate permissions only (fail on errors)"
-		@echo ""
-		@echo "Debugging & Logging:"
+	@echo ""
+	@echo "Debugging & Logging:"
 	@echo "  make inventory-debug        # run with debug logs"
 	@echo "  make inventory-error        # show only errors"
 	@echo "  make inventory-verbose      # info/verbose logs"
-		@echo ""
-		@echo "Collectors:"
+	@echo ""
+	@echo "Collectors:"
 	@echo "  make inventory-selective    # selected collectors only"
 	@echo "  make inventory-full         # heavy collectors enabled"
-	@echo "  make inventory-all-workspaces   # run inventory across all configured workspaces"
+	@echo "  make inventory-backup       # backup workspace to .dbc + zip"
+	@echo "  make inventory-all-backup   # backup all configured workspaces"
+	@echo "  make inventory-all-workspaces # alias de inventory-all"
 	@echo ""
 	@echo "Cache:"
 	@echo "  make cache-list             # list cached snapshots"
@@ -71,25 +76,27 @@ help:
 	@echo "  make cache-clear            # clear cache snapshots"
 	@echo ""
 	@echo "Parameters (optional):"
-		@echo "  WORKSPACE=name              # workspace name (for inventory-workspace)"
-	@echo "  OUTPUT_DIR=path             # output directory (default: ./output or from .env)"
-	@echo "  OUT=file.md                 # output markdown file (default: report.md)"
-	@echo "  OUT_XLSX=file.xlsx          # output Excel file"
+	@echo "  WORKSPACE=name              # workspace name no config.yaml"
+	@echo "  OUTPUT_DIR=path             # override output directory"
+	@echo "  OUT=file.md                 # override markdown output file"
+	@echo "  OUT_XLSX=file.xlsx          # override Excel output file"
 	@echo "  COLLECTORS=list             # comma-separated collectors"
-	@echo "  WORKSPACES_CONFIG=path      # workspaces YAML config (default: workspaces.yaml)"
-	@echo "  BATCH_SIZE=N                # items per batch (default: 200)"
-	@echo "  BATCH_SLEEP_MS=N            # sleep ms between batches"
-	@echo "  LOG_LEVEL=level             # debug, info, error, warning (default: info)"
+	@echo "  BATCH_SIZE=N                # override items per batch"
+	@echo "  BATCH_SLEEP_MS=N            # override sleep ms between batches"
+	@echo "  LOG_LEVEL=level             # debug, info, error, warning (default: config.yaml/env/info)"
 	@echo "  SERVERLESS=1                # enable serverless mode"
+	@echo "  BACKUP_WORKSPACE=1          # enable backup mode"
+	@echo "  BACKUP_OUT_DIR=path         # backup output directory"
 	@echo ""
 	@echo "Examples:"
-		@echo "  make setup                                      # configure workspaces"
-		@echo "  make inventory-workspace WORKSPACE=dev          # run on dev workspace"
-		@echo "  make inventory-all                              # run on all workspaces"
+	@echo "  make setup                                      # configure workspaces"
+	@echo "  make inventory-workspace WORKSPACE=dev          # run on dev workspace"
+	@echo "  make inventory-all                              # run on all workspaces"
+	@echo "  make check WORKSPACE=prod                       # validate specific workspace"
 	@echo "  make inventory OUTPUT_DIR=./reports"
 	@echo "  make inventory-full OUTPUT_DIR=/tmp/reports BATCH_SIZE=100"
 	@echo "  make inventory-selective OUTPUT_DIR=./data COLLECTORS=workspace,jobs"
-	@echo "  make inventory-all-workspaces WORKSPACES_CONFIG=workspaces.yaml"
+	@echo "  make inventory-backup BACKUP_OUT_DIR=./backups"
 
 install:
 	pip3 install -r requirements.txt
@@ -102,62 +109,51 @@ test:
 	$(PYTHON) -m pytest -q
 
 check:
-	@echo "🔍 Running health check..."
+	@echo "🔍 Running health check from config.yaml..."
 	@echo ""
-	$(PYTHON) -m lakeventory.health_check
+	$(PYTHON) -m lakeventory.health_check $(if $(WORKSPACE),--workspace $(WORKSPACE),)
 
 inventory:
-	$(PYTHON) -m lakeventory \
-		--source sdk \
-		--out $(OUT) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) \
-		--batch-size $(BATCH_SIZE) \
-		--batch-sleep-ms $(BATCH_SLEEP_MS) $(if $(filter 1,$(SERVERLESS)),--serverless,)
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(filter 1,$(BACKUP_WORKSPACE)),--backup-workspace,) $(if $(BACKUP_OUT_DIR),--backup-out-dir $(BACKUP_OUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) $(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),) $(if $(BATCH_SLEEP_MS),--batch-sleep-ms $(BATCH_SLEEP_MS),) $(if $(filter 1,$(SERVERLESS)),--serverless,)
+
+inventory-workspace:
+	@if [ -z "$(WORKSPACE)" ]; then echo "WORKSPACE é obrigatório. Ex.: make inventory-workspace WORKSPACE=dev"; exit 1; fi
+	$(PYTHON) -m lakeventory --source sdk --workspace $(WORKSPACE) $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(BACKUP_OUT_DIR),--backup-out-dir $(BACKUP_OUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) $(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),) $(if $(BATCH_SLEEP_MS),--batch-sleep-ms $(BATCH_SLEEP_MS),) $(if $(filter 1,$(SERVERLESS)),--serverless,)
+
+inventory-all:
+	@echo "Running inventory for all workspaces from config.yaml..."
+	$(PYTHON) -m lakeventory --source sdk --all-workspaces $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(BACKUP_OUT_DIR),--backup-out-dir $(BACKUP_OUT_DIR),) $(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),) $(if $(BATCH_SLEEP_MS),--batch-sleep-ms $(BATCH_SLEEP_MS),) $(if $(filter 1,$(SERVERLESS)),--serverless,)
+
+inventory-backup:
+	@echo "Running workspace backup mode from config.yaml..."
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) --backup-workspace $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(BACKUP_OUT_DIR),--backup-out-dir $(BACKUP_OUT_DIR),)
+
+inventory-all-backup:
+	@echo "Running workspace backup mode for all configured workspaces..."
+	$(PYTHON) -m lakeventory --all-workspaces --backup-workspace $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(BACKUP_OUT_DIR),--backup-out-dir $(BACKUP_OUT_DIR),)
+
+setup:
+	@echo "Running interactive setup wizard..."
+	$(PYTHON) -m lakeventory setup
+
+list-workspaces:
+	@echo "Configured workspaces:"
+	$(PYTHON) -m lakeventory --list-workspaces
 
 inventory-basic:
-	$(PYTHON) -m lakeventory \
-		--source sdk \
-		--out $(OUT) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),)
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),)
 
 inventory-validate:
-	$(PYTHON) -m lakeventory \
-		--source sdk \
-		--validate-permissions \
-		--log-level $(LOG_LEVEL)
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) --validate-permissions $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),)
 
 inventory-batch:
-	$(PYTHON) -m lakeventory \
-		--source sdk \
-		--out $(OUT) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) \
-		--batch-size $(BATCH_SIZE) \
-		--batch-sleep-ms $(BATCH_SLEEP_MS)
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) $(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),) $(if $(BATCH_SLEEP_MS),--batch-sleep-ms $(BATCH_SLEEP_MS),)
 
 inventory-serverless:
-	$(PYTHON) -m lakeventory \
-		--source sdk \
-		--serverless \
-		--out $(OUT) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),)
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) --serverless $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),)
 
 inventory-no-progress:
-	INVENTORY_PROGRESS=0 $(PYTHON) -m lakeventory \
-		--source sdk \
-		--out $(OUT) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) \
-		--batch-size $(BATCH_SIZE) \
-		--batch-sleep-ms $(BATCH_SLEEP_MS) $(if $(filter 1,$(SERVERLESS)),--serverless,)
+	INVENTORY_PROGRESS=0 $(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) $(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),) $(if $(BATCH_SLEEP_MS),--batch-sleep-ms $(BATCH_SLEEP_MS),) $(if $(filter 1,$(SERVERLESS)),--serverless,)
 
 inventory-debug:
 	$(MAKE) inventory LOG_LEVEL=debug
@@ -170,40 +166,14 @@ inventory-verbose:
 
 inventory-selective:
 	@echo "Run specific collectors with COLLECTORS=workspace,jobs,clusters"
-	$(PYTHON) -m lakeventory \
-		--source sdk \
-		--out $(OUT) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) \
-		--collectors $(COLLECTORS) \
-		--batch-size $(BATCH_SIZE) \
-		--batch-sleep-ms $(BATCH_SLEEP_MS) $(if $(filter 1,$(SERVERLESS)),--serverless,)
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) $(if $(COLLECTORS),--collectors $(COLLECTORS),) $(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),) $(if $(BATCH_SLEEP_MS),--batch-sleep-ms $(BATCH_SLEEP_MS),) $(if $(filter 1,$(SERVERLESS)),--serverless,)
 
 inventory-full:
-	$(PYTHON) -m lakeventory \
-		--source sdk \
-		--out $(OUT) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) \
-		--batch-size $(BATCH_SIZE) \
-		--batch-sleep-ms $(BATCH_SLEEP_MS) \
-		--include-runs \
-		--include-query-history \
-		--include-dbfs $(if $(filter 1,$(SERVERLESS)),--serverless,)
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) $(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),) $(if $(BATCH_SLEEP_MS),--batch-sleep-ms $(BATCH_SLEEP_MS),) --include-runs --include-query-history --include-dbfs $(if $(filter 1,$(SERVERLESS)),--serverless,)
 
 inventory-incremental:
 	@echo "Running incremental inventory (delta mode - only changes since last run)"
-	$(PYTHON) -m lakeventory \
-		--source sdk \
-		--out $(OUT) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) \
-		--batch-size $(BATCH_SIZE) \
-		--batch-sleep-ms $(BATCH_SLEEP_MS) \
-		--incremental $(if $(filter 1,$(SERVERLESS)),--serverless,)
+	$(PYTHON) -m lakeventory --source sdk $(if $(WORKSPACE),--workspace $(WORKSPACE),) $(if $(OUT),--out $(OUT),) $(if $(LOG_LEVEL),--log-level $(LOG_LEVEL),) $(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) $(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) $(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),) $(if $(BATCH_SLEEP_MS),--batch-sleep-ms $(BATCH_SLEEP_MS),) --incremental $(if $(filter 1,$(SERVERLESS)),--serverless,)
 
 cache-info:
 	$(PYTHON) -c "from lakeventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); info = c.get_cache_info(); print(f'Cache dir: {info[\"cache_dir\"]}'); print(f'Snapshots: {info[\"total_snapshots\"]}'); [print(f'  - {s}') for s in info['snapshots']]"
@@ -285,17 +255,15 @@ docker-test:
 docker-run:
 	@echo "Running Docker container (one-time inventory)..."
 	docker run --rm \
-		-e DATABRICKS_HOST \
-		-e DATABRICKS_TOKEN \
-		-v $(PWD)/output:/app/output \
+		-v $(PWD)/.lakeventory:/app/.lakeventory:ro \
+		-v $(PWD)/output:/data \
 		$(DOCKER_IMAGE):$(DOCKER_TAG) collect --out report.md
 
 docker-run-interactive:
 	@echo "Running Docker container (interactive)..."
 	docker run --rm -it \
-		-e DATABRICKS_HOST \
-		-e DATABRICKS_TOKEN \
-		-v $(PWD)/output:/app/output \
+		-v $(PWD)/.lakeventory:/app/.lakeventory:ro \
+		-v $(PWD)/output:/data \
 		$(DOCKER_IMAGE):$(DOCKER_TAG) sh
 
 docker-push:
@@ -308,10 +276,5 @@ docker-size:
 	@echo "Docker image sizes:"
 	@docker images $(DOCKER_IMAGE) --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
-inventory-all-workspaces:
-	@echo "Running inventory across all configured workspaces ($(WORKSPACES_CONFIG))..."
-	$(PYTHON) -m lakeventory.multi_workspace_cli \
-		--config $(WORKSPACES_CONFIG) \
-		--log-level $(LOG_LEVEL) \
-		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
-		$(if $(COMPARISON_OUT),--comparison-out $(COMPARISON_OUT),)
+inventory-all-workspaces: inventory-all
+	@true

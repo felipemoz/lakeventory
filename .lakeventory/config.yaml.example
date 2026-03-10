@@ -31,11 +31,14 @@ workspaces:
 global_config:
   output_dir: ./output  # Default output directory for all workspaces
   output_format: xlsx  # markdown, json, xlsx, all
+  log_level: info  # error, info, verbose, debug
   batch_size: 200
   batch_sleep_ms: 50
   include_runs: false
   include_query_history: false
   include_dbfs: false
+  backup_workspace: false  # Optional: Run workspace export backup before inventory
+  backup_output_dir: ""  # Optional: Backup directory (empty = use output_dir)
   enabled_collectors:
     - workspace
     - jobs

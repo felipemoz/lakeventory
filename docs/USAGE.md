@@ -142,11 +142,12 @@ Output structure (resolved from YAML `output_dir`):
     └── workspace_2345678_20260309_1550.xlsx
 ```
 
-### Custom Output Directory (Legacy)
+### Custom Output Directory
 
-Via environment variable (`.env`):
-```env
-OUTPUT_DIR=./my-reports
+Via `config.yaml` (configuração persistente):
+```yaml
+global_config:
+  output_dir: ./my-reports
 ```
 
 Via CLI (highest priority):

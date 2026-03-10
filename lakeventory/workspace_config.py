@@ -52,11 +52,14 @@ class GlobalConfig:
     
     output_dir: str = "./output"
     output_format: str = "xlsx"  # markdown, json, xlsx, all
+    log_level: str = "info"  # error, info, verbose, debug
     batch_size: int = 200
     batch_sleep_ms: int = 50
     include_runs: bool = False
     include_query_history: bool = False
     include_dbfs: bool = False
+    backup_workspace: bool = False
+    backup_output_dir: str = ""
     enabled_collectors: List[str] = field(default_factory=lambda: [
         "workspace", "jobs", "clusters", "sql", "mlflow", 
         "unity_catalog", "repos", "security", "identities", "serving"
@@ -161,7 +164,6 @@ class ConfigManager:
     
     DEFAULT_CONFIG_DIR = Path(".lakeventory")
     DEFAULT_CONFIG_FILE = "config.yaml"
-    LEGACY_ENV_FILE = Path(".env")
     
     def __init__(self, config_dir: Optional[Path] = None):
         """Initialize config manager."""
@@ -172,71 +174,12 @@ class ConfigManager:
         """Load configuration from file or create default."""
         if self.config_path.exists():
             return LakeventoryConfig.from_yaml(self.config_path)
-        
-        # Try to migrate from legacy .env if exists
-        if self.LEGACY_ENV_FILE.exists():
-            return self._migrate_from_env()
-        
+
         return LakeventoryConfig()
     
     def save(self, config: LakeventoryConfig) -> None:
         """Save configuration to file."""
         config.to_yaml(self.config_path)
-    
-    def _migrate_from_env(self) -> LakeventoryConfig:
-        """Migrate from legacy .env file to config.yaml."""
-        config = LakeventoryConfig()
-        
-        # Try to load .env variables
-        env_vars = self._load_env_file()
-        
-        host = env_vars.get("DATABRICKS_HOST")
-        if not host:
-            return config
-        
-        # Detect auth method
-        auth_method = "pat"
-        token = env_vars.get("DATABRICKS_TOKEN")
-        client_id = env_vars.get("DATABRICKS_CLIENT_ID")
-        
-        if client_id:
-            auth_method = "service_principal"
-        
-        # Create workspace config
-        workspace = WorkspaceConfig(
-            name="default",
-            host=host,
-            auth_method=auth_method,
-            description="Migrated from .env",
-            token=token,
-            client_id=client_id,
-            client_secret=env_vars.get("DATABRICKS_CLIENT_SECRET"),
-            tenant_id=env_vars.get("ARM_TENANT_ID"),
-        )
-        
-        config.add_workspace(workspace)
-        config.default_workspace = "default"
-        
-        return config
-    
-    def _load_env_file(self) -> Dict[str, str]:
-        """Load variables from .env file."""
-        env_vars = {}
-        
-        if not self.LEGACY_ENV_FILE.exists():
-            return env_vars
-        
-        with open(self.LEGACY_ENV_FILE, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    env_vars[key.strip()] = value.strip().strip('"').strip("'")
-        
-        return env_vars
     
     def apply_workspace_env(self, workspace: WorkspaceConfig) -> None:
         """Apply workspace configuration to environment variables."""

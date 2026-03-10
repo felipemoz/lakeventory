@@ -46,9 +46,9 @@ global_config:
 
 ---
 
-## Single Workspace Authentication (Legacy)
+## Single Workspace Authentication
 
-For single workspace, configure via `.env` file:
+Configure via `make setup` (wizard interativo) ou edite `.lakeventory/config.yaml` diretamente.
 
 ## 1️⃣ Service Principal (Recommended for Production/CI-CD)
 
@@ -61,12 +61,15 @@ Best for automation, CI/CD pipelines, and scheduled jobs.
 3. Assign required permissions (read-only access to workspace APIs)
 4. Create a PAT (Personal Access Token) for the Service Principal
 
-### Configure in `.env`
+### Configure in `.lakeventory/config.yaml`
 
-```env
-DATABRICKS_HOST=https://<workspace-host>
-DATABRICKS_CLIENT_ID=<service-principal-id>
-DATABRICKS_CLIENT_SECRET=<service-principal-secret>
+```yaml
+workspaces:
+  meu-workspace:
+    host: https://<workspace-host>
+    auth_method: service_principal
+    client_id: <service-principal-id>
+    client_secret: <service-principal-secret>
 ```
 
 **Advantages:**
@@ -126,11 +129,14 @@ Personal Access Token from your Databricks account.
 1. In Databricks, click your profile → User Settings → Access tokens
 2. Click "Generate new token" → Copy the token
 
-### Configure in `.env`
+### Configure in `.lakeventory/config.yaml`
 
-```env
-DATABRICKS_HOST=https://<workspace-host>
-DATABRICKS_TOKEN=<your-pat-token>
+```yaml
+workspaces:
+  meu-workspace:
+    host: https://<workspace-host>
+    auth_method: pat
+    token: <your-pat-token>
 ```
 
 **Advantages:**
