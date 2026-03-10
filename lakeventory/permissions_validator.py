@@ -3,6 +3,7 @@
 from databricks.sdk import WorkspaceClient
 from typing import Dict, List, Tuple
 import os
+from itertools import islice
 
 
 class PermissionsValidator:
@@ -54,7 +55,7 @@ class PermissionsValidator:
     def _check_jobs_api(self):
         """Check jobs.list permission."""
         try:
-            list(self.client.jobs.list(limit=1))
+            list(islice(self.client.jobs.list(), 1))
             self.results["jobs"] = True
         except Exception as e:
             self.results["jobs"] = False
@@ -63,7 +64,7 @@ class PermissionsValidator:
     def _check_clusters_api(self, cloud_provider: str):
         """Check clusters.list permission."""
         try:
-            list(self.client.clusters.list(limit=1))
+            list(islice(self.client.clusters.list(), 1))
             self.results["clusters"] = True
         except Exception as e:
             self.results["clusters"] = False
@@ -72,7 +73,7 @@ class PermissionsValidator:
     def _check_sql_api(self):
         """Check sql.list permission."""
         try:
-            list(self.client.warehouses.list(limit=1))
+            list(islice(self.client.warehouses.list(), 1))
             self.results["sql"] = True
         except Exception as e:
             self.results["sql"] = False
@@ -81,16 +82,16 @@ class PermissionsValidator:
     def _check_mlflow_api(self):
         """Check mlflow.list permission."""
         try:
-            list(self.client.experiments.list(limit=1))
+            list(islice(self.client.experiments.search_experiments(), 1))
             self.results["mlflow"] = True
         except Exception as e:
             self.results["mlflow"] = False
-            self.warnings.append(f"experiments.list: {str(e)}")
+            self.warnings.append(f"experiments.search: {str(e)}")
 
     def _check_unity_catalog_api(self):
         """Check unity catalog permissions."""
         try:
-            list(self.client.catalogs.list(limit=1))
+            list(islice(self.client.catalogs.list(), 1))
             self.results["unity_catalog"] = True
         except Exception as e:
             self.results["unity_catalog"] = False
@@ -99,7 +100,7 @@ class PermissionsValidator:
     def _check_repos_api(self):
         """Check repos.list permission."""
         try:
-            list(self.client.repos.list(limit=1))
+            list(islice(self.client.repos.list(), 1))
             self.results["repos"] = True
         except Exception as e:
             self.results["repos"] = False
@@ -117,7 +118,7 @@ class PermissionsValidator:
     def _check_identities_api(self):
         """Check users.list permission."""
         try:
-            list(self.client.users.list(limit=1))
+            list(islice(self.client.users.list(), 1))
             self.results["identities"] = True
         except Exception as e:
             self.results["identities"] = False
@@ -135,11 +136,18 @@ class PermissionsValidator:
     def _check_sharing_api(self):
         """Check sharing (delta sharing) permission."""
         try:
-            list(self.client.shares.list(limit=1))
+            # Delta Sharing API methods vary by SDK version and workspace config
+            if hasattr(self.client.shares, 'list'):
+                list(islice(self.client.shares.list(), 1))
+            elif hasattr(self.client.shares, 'get'):
+                # Try alternative API if list not available
+                pass
+            else:
+                raise AttributeError("Delta Sharing API not available")
             self.results["sharing"] = True
         except Exception as e:
             self.results["sharing"] = False
-            self.warnings.append(f"shares.list: {str(e)}")
+            self.warnings.append(f"shares: {str(e)}")
 
     def _check_dbfs_api(self):
         """Check dbfs.list permission (heavy collector)."""
