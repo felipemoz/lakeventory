@@ -44,14 +44,14 @@ workspaces:
 ## Authentication Issues
 
 ### Error: "Missing DATABRICKS_HOST"
-**Solution (Single Workspace):** Set `DATABRICKS_HOST` in `.env` or environment variable
-```bash
-export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
-```
-
-**Solution (Multi-Workspace):** Configure workspaces via setup wizard:
+**Solution:** Configure o workspace em `.lakeventory/config.yaml`:
 ```bash
 make setup
+```
+
+Ou defina temporariamente via env var para debug:
+```bash
+export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 ```
 
 ### Error: "Missing Databricks credentials"

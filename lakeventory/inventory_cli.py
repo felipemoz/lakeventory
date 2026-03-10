@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from lakeventory.cache import InventoryCache
-from lakeventory.client import build_workspace_client, load_output_dir
+from lakeventory.client import build_workspace_client
 from lakeventory.collectors import collect_all_findings, collect_findings_selective
 from lakeventory.logging_config import configure_logging
 from lakeventory.output import (
@@ -21,6 +21,7 @@ from lakeventory.output import (
     write_markdown,
 )
 from lakeventory.permissions_validator import PermissionsValidator
+from lakeventory.workspace_backup import backup_workspace
 from lakeventory.workspace_config import ConfigManager, WorkspaceConfig
 
 
@@ -60,6 +61,45 @@ def _apply_workspace_id(name: str, workspace_id: str) -> str:
     return f"{workspace_id}_{path.stem}{path.suffix}"
 
 
+
+def _resolve_path(root: Path, path_str: str) -> Path:
+    """Resolve relative paths from workspace root while preserving absolute paths."""
+    path = Path(path_str)
+    if path.is_absolute():
+        return path.resolve()
+    return (root / path).resolve()
+
+
+def _apply_config_defaults(args, config) -> None:
+    """Apply config.yaml defaults when CLI flags were omitted."""
+    global_cfg = config.global_config
+
+    if not args.collectors and getattr(global_cfg, "enabled_collectors", None):
+        args.collectors = ",".join(global_cfg.enabled_collectors)
+
+    if args.batch_size is None:
+        args.batch_size = getattr(global_cfg, "batch_size", 200)
+    if args.batch_sleep_ms is None:
+        args.batch_sleep_ms = getattr(global_cfg, "batch_sleep_ms", 0)
+
+    if args.include_runs is None:
+        args.include_runs = getattr(global_cfg, "include_runs", False)
+    if args.include_query_history is None:
+        args.include_query_history = getattr(global_cfg, "include_query_history", False)
+    if args.include_dbfs is None:
+        args.include_dbfs = getattr(global_cfg, "include_dbfs", False)
+
+    if not args.out and not args.out_xlsx:
+        output_format = getattr(global_cfg, "output_format", "xlsx")
+        if output_format == "markdown":
+            args.out = "workspace_id.md"
+        elif output_format == "all":
+            args.out = "workspace_id.md"
+            args.out_xlsx = "workspace_id.xlsx"
+        else:
+            args.out_xlsx = "workspace_id.xlsx"
+
+
 def main() -> int:
     """Main entry point for inventory CLI."""
     parser = argparse.ArgumentParser(
@@ -86,9 +126,9 @@ def main() -> int:
     parser.add_argument(
         "--out-dir",
         default="",
-        help="Directory where output files will be written (empty = use OUTPUT_DIR from .env or default to ./output)",
+        help="Directory where output files will be written (empty = use global_config.output_dir from config.yaml)",
     )
-    parser.add_argument("--out", default="workspace_id.md", help="Output markdown file")
+    parser.add_argument("--out", default="", help="Output markdown file")
     parser.add_argument("--out-xlsx", default="", help="Output Excel file with categorized sheets")
     parser.add_argument(
         "--source",
@@ -109,28 +149,31 @@ def main() -> int:
     parser.add_argument(
         "--include-runs",
         action="store_true",
+        default=None,
         help="Include job runs (can be large)",
     )
     parser.add_argument(
         "--include-query-history",
         action="store_true",
+        default=None,
         help="Include SQL query history (can be large)",
     )
     parser.add_argument(
         "--include-dbfs",
         action="store_true",
+        default=None,
         help="Include DBFS root listing",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=200,
+        default=None,
         help="Number of items per batch before sleeping",
     )
     parser.add_argument(
         "--batch-sleep-ms",
         type=int,
-        default=0,
+        default=None,
         help="Sleep time in ms between batches",
     )
     parser.add_argument(
@@ -145,9 +188,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--log-level",
-        default=os.getenv("INVENTORY_LOG_LEVEL", "info"),
+        default="",
         choices=["error", "info", "verbose", "debug"],
-        help="Logging verbosity level (error, info/verbose, debug)",
+        help="Logging verbosity level (CLI > INVENTORY_LOG_LEVEL > config.yaml > info)",
     )
     parser.add_argument(
         "--validate-permissions",
@@ -159,6 +202,16 @@ def main() -> int:
         action="store_true",
         help="Skip permission validation (not recommended)",
     )
+    parser.add_argument(
+        "--backup-workspace",
+        action="store_true",
+        help="Backup workspace recursively using workspace export API and generate zip archive",
+    )
+    parser.add_argument(
+        "--backup-out-dir",
+        default="",
+        help="Directory for workspace backup artifacts (CLI > config.yaml > out-dir)",
+    )
     args = parser.parse_args()
 
     # Handle special commands first
@@ -166,12 +219,20 @@ def main() -> int:
         from lakeventory.setup_wizard import run_setup_wizard
         return run_setup_wizard()
     
-    configure_logging(args.log_level)
-    logger.debug("Parsed CLI args: %s", args)
-    
     # Load multi-workspace configuration
     config_manager = ConfigManager()
     config = config_manager.load()
+    _apply_config_defaults(args, config)
+
+    resolved_log_level = (
+        args.log_level
+        or os.getenv("INVENTORY_LOG_LEVEL", "").strip().lower()
+        or getattr(config.global_config, "log_level", "info")
+        or "info"
+    )
+
+    configure_logging(resolved_log_level)
+    logger.debug("Parsed CLI args: %s", args)
     
     # Handle --list-workspaces
     if args.list_workspaces:
@@ -237,7 +298,7 @@ def main() -> int:
     # Handle single workspace (explicit or default)
     workspace_name = args.workspace or config.default_workspace
     
-    if not workspace_name and not os.getenv("DATABRICKS_HOST"):
+    if not workspace_name:
         logger.error("No workspace specified and no default configured.")
         logger.error("Run 'lakeventory setup' or use --workspace flag.")
         return 1
@@ -266,14 +327,10 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
         args.out_dir = str(workspace_output_dir)
 
     root = Path(args.root).resolve()
-    
-    # Determine output directory: CLI arg > .env config > default
-    if args.out_dir:
-        output_dir_str = args.out_dir
-    else:
-        output_dir_str = load_output_dir(root)
-    
-    out_dir = (root / output_dir_str).resolve()
+
+    # Output directory: CLI > workspace.output_dir (already in args.out_dir) > global_config > default
+    output_dir_str = args.out_dir or getattr(config.global_config, "output_dir", "output") or "output"
+    out_dir = _resolve_path(root, output_dir_str)
     out_dir.mkdir(parents=True, exist_ok=True)
     logger.debug("Output directory: %s", out_dir)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
@@ -283,14 +340,42 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
             return path.with_name(f"{path.stem}_{timestamp}{path.suffix}")
         return path.with_name(f"{path.name}_{timestamp}")
 
-    workspace_id = _extract_workspace_id(os.getenv("DATABRICKS_HOST", ""))
-    logger.info("Using workspace_id: %s", workspace_id)
-    if args.serverless:
-        logger.info("Running in serverless mode (cluster collectors skipped)")
-
     # Build client and collect findings
     logger.info("Connecting to Databricks workspace...")
     client = build_workspace_client(root)
+
+    workspace_id = _extract_workspace_id(os.getenv("DATABRICKS_HOST", ""))
+    logger.info("Using workspace_id: %s", workspace_id)
+
+    backup_enabled = bool(args.backup_workspace) or bool(
+        getattr(config.global_config, "backup_workspace", False)
+    )
+
+    if backup_enabled:
+        backup_output_dir = args.backup_out_dir
+        if not backup_output_dir:
+            backup_output_dir = getattr(config.global_config, "backup_output_dir", "")
+        if not backup_output_dir:
+            backup_dir = out_dir
+        else:
+            backup_base_dir = _resolve_path(root, backup_output_dir)
+            backup_dir = backup_base_dir / workspace_name if workspace_name else backup_base_dir
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info("Running workspace backup mode...")
+        backup_folder, backup_zip, backup_warnings = backup_workspace(client, workspace_id, backup_dir)
+        print(f"Backup folder: {backup_folder}")
+        print(f"Backup archive: {backup_zip}")
+        if backup_warnings:
+            print(f"Backup warnings: {len(backup_warnings)}")
+            for warning in backup_warnings[:20]:
+                print(f"  - {warning}")
+            if len(backup_warnings) > 20:
+                print(f"  ... and {len(backup_warnings) - 20} more")
+        return 0
+
+    if args.serverless:
+        logger.info("Running in serverless mode (cluster collectors skipped)")
 
     # Validate permissions (always run unless explicitly skipped)
     if not args.skip_validation:

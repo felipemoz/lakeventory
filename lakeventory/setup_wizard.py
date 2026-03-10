@@ -314,6 +314,28 @@ def _build_workspace_client(workspace: WorkspaceConfig) -> WorkspaceClient:
     return WorkspaceClient(host=workspace.host, token=workspace.token)
 
 
+def configure_backup_settings(config: LakeventoryConfig) -> None:
+    """Configure global backup behavior for workspace export."""
+    print_header("💾 Backup Settings")
+    current_enabled = "enabled" if config.global_config.backup_workspace else "disabled"
+    current_dir = config.global_config.backup_output_dir or "(uses output_dir)"
+    print(f"\nCurrent backup mode: {current_enabled}")
+    print(f"Current backup output dir: {current_dir}")
+
+    enable = input("\nEnable workspace backup before inventory? [y/N]: ").strip().lower()
+    config.global_config.backup_workspace = enable == "y"
+
+    if config.global_config.backup_workspace:
+        backup_dir = input(
+            "Backup output dir (optional, empty = use output_dir): "
+        ).strip()
+        config.global_config.backup_output_dir = backup_dir
+        print("  ✅ Backup settings updated")
+    else:
+        config.global_config.backup_output_dir = ""
+        print("  ✅ Backup disabled")
+
+
 def main_menu(config: LakeventoryConfig, config_manager: ConfigManager) -> None:
     """Main interactive menu."""
     print_header("🚀 Lakeventory Multi-Workspace Setup")
@@ -333,10 +355,11 @@ def main_menu(config: LakeventoryConfig, config_manager: ConfigManager) -> None:
         print("  3. ❌ Remove workspace")
         print("  4. 🔍 List all workspaces")
         print("  5. ⚙️  Set default workspace")
-        print("  6. ✅ Save and exit")
-        print("  7. 🚪 Exit without saving")
+        print("  6. 💾 Configure backup settings")
+        print("  7. ✅ Save and exit")
+        print("  8. 🚪 Exit without saving")
         
-        choice = input("\nSelect [1-7]: ").strip()
+        choice = input("\nSelect [1-8]: ").strip()
         
         if choice == '1':
             add_workspace_wizard(config)
@@ -367,6 +390,9 @@ def main_menu(config: LakeventoryConfig, config_manager: ConfigManager) -> None:
                 print(f"  ❌ Workspace '{name}' not found")
         
         elif choice == '6':
+            configure_backup_settings(config)
+
+        elif choice == '7':
             config_manager.save(config)
             print(f"\n✅ Configuration saved to {config_manager.config_path}")
             print("\nNext steps:")
@@ -376,9 +402,11 @@ def main_menu(config: LakeventoryConfig, config_manager: ConfigManager) -> None:
                 print(f"  • lakeventory  # Run on default workspace ({config.default_workspace})")
             if len(config.workspaces) > 1:
                 print("  • lakeventory --all-workspaces  # Run on all workspaces")
+            if config.global_config.backup_workspace:
+                print("  • lakeventory --backup-workspace  # Run backup mode")
             break
         
-        elif choice == '7':
+        elif choice == '8':
             print("\n🚪 Exiting without saving")
             break
         

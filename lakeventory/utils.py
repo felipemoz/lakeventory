@@ -14,6 +14,18 @@ except Exception:
 logger = logging.getLogger(__name__)
 
 
+def _is_expected_skip(exc: Exception) -> bool:
+    """Return True for known non-actionable limitations that should be skipped."""
+    message = str(exc).lower()
+    known_patterns = [
+        "no metastore assigned",
+        "ds_no_metastore_assigned",
+        "not an account admin",
+        "has no attribute 'list'",
+    ]
+    return any(pattern in message for pattern in known_patterns)
+
+
 def _progress_enabled() -> bool:
     """Return True when progress bars should be shown."""
     return os.getenv("INVENTORY_PROGRESS", "1") not in {"0", "false", "False", "no", "NO"}
@@ -52,6 +64,9 @@ def safe_iter(label: str, iterator, warnings: List[str], batch_size: int, sleep_
             if batch_size > 0 and count % batch_size == 0 and sleep_ms > 0:
                 time.sleep(sleep_ms / 1000.0)
     except Exception as exc:
+        if _is_expected_skip(exc):
+            logger.info("%s skipped: %s", label, exc)
+            return
         logger.error("%s failed: %s", label, exc)
         warnings.append(f"{label} failed: {exc}")
 
@@ -73,6 +88,9 @@ def _safe_list_call(label: str, api_call, warnings: List[str]):
     try:
         return api_call()
     except Exception as exc:
+        if _is_expected_skip(exc):
+            logger.info("%s skipped: %s", label, exc)
+            return []
         logger.debug("%s not available: %s", label, exc)
         warnings.append(f"{label} not available: {exc}")
         return []

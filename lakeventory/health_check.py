@@ -1,22 +1,75 @@
-"""Health check for inventory tool: dependencies, auth, and workspace."""
+"""Health check for Lakeventory using config.yaml workspace settings."""
 
-import sys
-import os
+import argparse
 import re
-from pathlib import Path
+import sys
 from itertools import islice
+from pathlib import Path
+from typing import Optional, Tuple
 from urllib.parse import urlparse
 
+from databricks.sdk import WorkspaceClient
 
-def run_health_check():
+from lakeventory.workspace_config import ConfigManager, WorkspaceConfig
+
+
+CONFIG_MANAGER = ConfigManager()
+
+
+def _extract_workspace_id(host: str) -> str:
+    if not host:
+        return "workspace"
+    parsed = urlparse(host)
+    hostname = parsed.hostname or host
+    match = re.search(r"adb-(\d+)", hostname)
+    if match:
+        return match.group(1)
+    match = re.search(r"dbc-([a-z0-9-]+)", hostname)
+    if match:
+        return match.group(1)
+    return hostname or "workspace"
+
+
+def _build_client(workspace: WorkspaceConfig) -> WorkspaceClient:
+    if workspace.auth_method == "service_principal":
+        if not workspace.client_id or not workspace.client_secret:
+            raise RuntimeError(
+                "Service Principal incompleto no config.yaml: faltando client_id e/ou client_secret"
+            )
+        return WorkspaceClient(
+            host=workspace.host,
+            client_id=workspace.client_id,
+            client_secret=workspace.client_secret,
+        )
+
+    if workspace.auth_method == "pat":
+        if not workspace.token:
+            raise RuntimeError("PAT incompleto no config.yaml: faltando token")
+        return WorkspaceClient(host=workspace.host, token=workspace.token)
+
+    raise RuntimeError(
+        f"Método de autenticação não suportado no config.yaml: {workspace.auth_method}"
+    )
+
+
+def _load_workspace(workspace_name: Optional[str] = None) -> Tuple[Optional[WorkspaceConfig], Path]:
+    config = CONFIG_MANAGER.load()
+    config_path = CONFIG_MANAGER.config_path.resolve()
+
+    if not config.workspaces:
+        return None, config_path
+
+    workspace = config.get_workspace(workspace_name)
+    return workspace, config_path
+
+
+def run_health_check(workspace_name: Optional[str] = None) -> bool:
     """Run all health checks and print results."""
-    # Try to import required packages
     print("=" * 70)
-    print("INVENTORY TOOL HEALTH CHECK")
+    print("LAKEVENTORY HEALTH CHECK")
     print("=" * 70)
     print()
 
-    # 1. Check Python version
     print("[1/4] Python Version")
     print(f"  Python {sys.version.split()[0]}")
     if sys.version_info >= (3, 8):
@@ -26,7 +79,6 @@ def run_health_check():
         return False
     print()
 
-    # 2. Check dependencies
     print("[2/4] Dependencies")
     deps = {
         "databricks.sdk": "databricks-sdk",
@@ -50,62 +102,60 @@ def run_health_check():
         return False
     print()
 
-    # 3. Check Databricks credentials
-    print("[3/4] Databricks Credentials")
-    host = os.getenv("DATABRICKS_HOST", "").strip()
-    token = os.getenv("DATABRICKS_TOKEN", "").strip()
-    username = os.getenv("DATABRICKS_USERNAME", "").strip()
-    password = os.getenv("DATABRICKS_PASSWORD", "").strip()
-
-    if not host:
-        print("  ❌ DATABRICKS_HOST not set")
-        return False
-    else:
-        print(f"  ✅ DATABRICKS_HOST: {host}")
-
-    if token or (username and password):
-        if token:
-            print(f"  ✅ DATABRICKS_TOKEN: configured")
+    print("[3/4] Lakeventory Config")
+    workspace, config_path = _load_workspace(workspace_name)
+    if not workspace:
+        if workspace_name:
+            print(f"  ❌ Workspace '{workspace_name}' não encontrado em: {config_path}")
+            print("  ℹ️  Run: make list-workspaces")
         else:
-            print(f"  ✅ DATABRICKS_USERNAME/PASSWORD: configured")
-    else:
-        print("  ❌ No authentication configured (need DATABRICKS_TOKEN or USERNAME/PASSWORD)")
+            print(f"  ❌ Nenhum workspace configurado em: {config_path}")
+            print("  ℹ️  Run: make setup")
         return False
 
-    cloud_provider = os.getenv("DATABRICKS_CLOUD_PROVIDER", "").upper() or "AUTO"
-    print(f"  ✅ Cloud Provider: {cloud_provider}")
+    print(f"  ✅ Config file: {config_path}")
+    print(f"  ✅ Workspace: {workspace.name}")
+    print(f"  ✅ Host: {workspace.host}")
+    print(f"  ✅ Auth Method: {workspace.auth_method}")
+
+    if workspace.auth_method == "pat":
+        if not workspace.token:
+            print("  ❌ Token PAT ausente no config.yaml")
+            return False
+        print("  ✅ PAT token: configured")
+    elif workspace.auth_method == "service_principal":
+        missing = [
+            field_name
+            for field_name, value in {
+                "client_id": workspace.client_id,
+                "client_secret": workspace.client_secret,
+            }.items()
+            if not value
+        ]
+        if missing:
+            print(f"  ❌ Service Principal incompleto: faltando {', '.join(missing)}")
+            return False
+        print("  ✅ Service Principal: configured")
+    else:
+        print(f"  ❌ Auth method not supported: {workspace.auth_method}")
+        return False
     print()
 
-    # 4. Check workspace connection
     print("[4/4] Workspace Connection")
     try:
-        from databricks.sdk import WorkspaceClient
-        
         print("  Connecting to workspace...")
-        client = WorkspaceClient(
-            host=host,
-            token=token if token else None,
-            username=username if username else None,
-            password=password if password else None,
-        )
-        
-        # Try to get workspace info
+        client = _build_client(workspace)
+
         status = client.workspace.get_status(path="/")
         workspace_id = getattr(status, "workspace_id", None) or getattr(status, "object_id", None)
         if not workspace_id:
-            host = os.getenv("DATABRICKS_HOST", "")
-            parsed = urlparse(host)
-            hostname = parsed.hostname or host
-            match = re.search(r"adb-(\d+)", hostname)
-            workspace_id = match.group(1) if match else hostname or "workspace"
+            workspace_id = _extract_workspace_id(workspace.host)
         print(f"  ✅ Connected to workspace ID: {workspace_id}")
-        
-        # Try a simple API call to verify access
+
         list(islice(client.workspace.list(path="/"), 1))
-        print(f"  ✅ Can list workspace objects")
-        
-    except Exception as e:
-        print(f"  ❌ Connection failed: {str(e)}")
+        print("  ✅ Can list workspace objects")
+    except Exception as exc:
+        print(f"  ❌ Connection failed: {exc}")
         return False
 
     print()
@@ -115,14 +165,15 @@ def run_health_check():
     print()
     print("Next steps:")
     print("  1. Run: make inventory-validate")
-    print("     (to validate API permissions)")
     print("  2. Run: make inventory")
-    print("     (to generate workspace inventory)")
     print()
-    
+
     return True
 
 
 if __name__ == "__main__":
-    success = run_health_check()
+    parser = argparse.ArgumentParser(description="Validate Lakeventory config.yaml and workspace access")
+    parser.add_argument("-w", "--workspace", help="Workspace name to validate from config.yaml")
+    args = parser.parse_args()
+    success = run_health_check(args.workspace)
     sys.exit(0 if success else 1)

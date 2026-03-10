@@ -10,7 +10,7 @@
 
 ```bash
 docker build -t lakeventory:alpine .
-docker run -e DATABRICKS_HOST -e DATABRICKS_TOKEN lakeventory:alpine
+docker run --rm -v $(pwd)/.lakeventory:/app/.lakeventory:ro lakeventory:alpine
 ```
 
 **Stages:**
@@ -27,7 +27,7 @@ docker run -e DATABRICKS_HOST -e DATABRICKS_TOKEN lakeventory:alpine
 
 ```bash
 docker build -f Dockerfile.distroless -t lakeventory:distroless .
-docker run -e DATABRICKS_HOST -e DATABRICKS_TOKEN lakeventory:distroless collect --out report.md
+docker run --rm -v $(pwd)/.lakeventory:/app/.lakeventory:ro lakeventory:distroless collect --out report.md
 ```
 
 **Pros:**
@@ -108,10 +108,9 @@ docker buildx build --platform linux/amd64,linux/arm64 -t lakeventory:multiarch 
 ### Default (Scheduled Mode)
 ```bash
 docker run -d \
-  -e DATABRICKS_HOST=https://your-workspace.cloud.databricks.com \
-  -e DATABRICKS_TOKEN=dapi... \
+  -v $(pwd)/.lakeventory:/app/.lakeventory:ro \
   -e SCHEDULE_HOURS=24 \
-  -v lakeventory_output:/app/output \
+  -v lakeventory_output:/data \
   -v lakeventory_cache:/app/.cache \
   lakeventory:latest
 ```
@@ -119,25 +118,22 @@ docker run -d \
 ### One-time Run
 ```bash
 docker run --rm \
-  -e DATABRICKS_HOST \
-  -e DATABRICKS_TOKEN \
-  -v $(pwd)/output:/app/output \
+  -v $(pwd)/.lakeventory:/app/.lakeventory:ro \
+  -v $(pwd)/output:/data \
   lakeventory:alpine collect --out report.md --out-xlsx report.xlsx
 ```
 
 ### Distroless (Direct Command)
 ```bash
 docker run --rm \
-  -e DATABRICKS_HOST \
-  -e DATABRICKS_TOKEN \
+  -v $(pwd)/.lakeventory:/app/.lakeventory:ro \
   lakeventory:distroless collect --out report.md
 ```
 
 ### Static Binary
 ```bash
 docker run --rm \
-  -e DATABRICKS_HOST \
-  -e DATABRICKS_TOKEN \
+  -v $(pwd)/.lakeventory:/app/.lakeventory:ro \
   lakeventory:static version
 ```
 
@@ -151,8 +147,8 @@ Works with all variants:
 services:
   lakeventory:
     image: lakeventory:alpine  # or :distroless, :static
-    env_file: .env
     volumes:
+      - ./.lakeventory:/app/.lakeventory:ro  # credenciais e config
       - lakeventory_output:/app/output
       - lakeventory_cache:/app/.cache
 ```

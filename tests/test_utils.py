@@ -31,3 +31,29 @@ def test_safe_iter_handles_exception():
     assert warnings
     assert "label failed" in warnings[0]
 
+
+def test_safe_iter_skips_expected_metastore_exception():
+    warnings = []
+
+    def bad_iter():
+        raise RuntimeError("DS_NO_METASTORE_ASSIGNED: No metastore assigned for the current workspace")
+        yield 1
+
+    output = list(utils.safe_iter("catalogs.list", bad_iter(), warnings, batch_size=0, sleep_ms=0))
+
+    assert output == []
+    assert warnings == []
+
+
+def test_safe_list_call_skips_expected_list_not_available():
+    warnings = []
+
+    result = utils._safe_list_call(
+        "vector_search_endpoints.list",
+        lambda: (_ for _ in ()).throw(AttributeError("'VectorSearchEndpointsAPI' object has no attribute 'list'")),
+        warnings,
+    )
+
+    assert result == []
+    assert warnings == []
+

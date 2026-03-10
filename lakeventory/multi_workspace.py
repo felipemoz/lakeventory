@@ -5,11 +5,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from lakeventory.client import _load_env
 from lakeventory.collectors import collect_all_findings, collect_findings_selective
 from lakeventory.models import Finding
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_env_file(env_file: Path) -> Dict[str, str]:
+    """Lê variáveis de um arquivo .env específico (legado multi-workspace)."""
+    env: Dict[str, str] = {}
+    if not env_file.exists():
+        return env
+    for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        env[key.strip()] = value.strip().strip('"').strip("'")
+    return env
 
 
 @dataclass
@@ -119,7 +132,7 @@ def build_workspace_client_from_env_file(env_file: Path):
     """
     from databricks.sdk import WorkspaceClient
 
-    env = _load_env(env_file)
+    env = _parse_env_file(env_file)
 
     host = env.get("DATABRICKS_HOST", "")
     if not host:
@@ -166,7 +179,7 @@ def run_workspace_inventory(
 
     client = build_workspace_client_from_env_file(env_file)
 
-    env = _load_env(env_file)
+    env = _parse_env_file(env_file)
     workspace_id = _extract_workspace_id(env.get("DATABRICKS_HOST", "")) or ws_config.name
 
     serverless_collectors = (

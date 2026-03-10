@@ -6,6 +6,8 @@ from lakeventory.collectors import (
     collect_jobs,
     collect_clusters,
     collect_findings_selective,
+    collect_serving_assets,
+    collect_mlflow_assets,
 )
 from lakeventory.models import Finding
 
@@ -57,6 +59,26 @@ class FakeClient:
         self.global_init_scripts = Service([])
         self.instance_profiles = Service([])
         self.instance_pools = Service([])
+
+
+class VectorSearchEndpointsService:
+    def __init__(self, items=None):
+        self._items = items or []
+
+    def list_endpoints(self, *args, **kwargs):
+        return self._items
+
+
+class NoListFeatureStoreService:
+    pass
+
+
+class ExperimentsService:
+    def __init__(self, items=None):
+        self._items = items or []
+
+    def list_experiments(self, *args, **kwargs):
+        return self._items
 
 
 def test_collect_workspace_objects():
@@ -151,3 +173,42 @@ def test_collect_findings_selective_invalid_collector():
     )
 
     assert any("Unknown collector: invalid" in w for w in warnings)
+
+
+def test_collect_serving_assets_vector_search_list_endpoints_fallback():
+    client = FakeClient({"/": []})
+    client.serving_endpoints = Service([])
+    client.vector_search_endpoints = VectorSearchEndpointsService([Obj(name="vse-1")])
+    warnings = []
+
+    findings = collect_serving_assets(
+        client,
+        warnings=warnings,
+        batch_size=10,
+        batch_sleep_ms=0,
+    )
+
+    kinds = {f.kind for f in findings}
+    assert "vector_search_endpoint" in kinds
+    assert warnings == []
+
+
+def test_collect_mlflow_assets_feature_store_fallback_to_registered_models():
+    client = FakeClient({"/": []})
+    client.experiments = ExperimentsService([])
+    client.registered_models = Service([Obj(name="model-a")])
+    client.model_versions = Service([])
+    client.feature_store = NoListFeatureStoreService()
+    warnings = []
+
+    findings = collect_mlflow_assets(
+        client,
+        warnings=warnings,
+        batch_size=10,
+        batch_sleep_ms=0,
+    )
+
+    kinds = [f.kind for f in findings]
+    assert "mlflow_model" in kinds
+    assert "feature_store" in kinds
+    assert warnings == []

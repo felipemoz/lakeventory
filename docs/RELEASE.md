@@ -100,7 +100,7 @@ First public alpha for Lakeventory with scheduled runs and updated branding.
 ### Highlights
 - Lakeventory package rename and CLI usage (`python -m lakeventory`)
 - Scheduled container runner with full-first then incremental mode
-- Docker Compose with `.env` loading and named volumes for output/cache
+- Docker Compose com montagem de `.lakeventory/config.yaml` e volumes nomeados de output/cache
 - Service Principal authentication support and auto-detection
 - Makefile parameter support for `OUTPUT_DIR`
 - Comprehensive docs split into focused guides
@@ -110,7 +110,7 @@ First public alpha for Lakeventory with scheduled runs and updated branding.
 **Added**
 - Docker Compose scheduled runner (full-first, then incremental)
 - Dockerfile + runner script (`scripts/run_scheduled.sh`)
-- `.env` support in compose via `env_file`
+- Compose com volume para `.lakeventory/config.yaml`
 - Named volumes for output and cache persistence
 - Release notes template in `docs/RELEASE.md`
 - Contributors guide (`CONTRIBUTORS.md`) and MIT `LICENSE`
@@ -120,7 +120,7 @@ First public alpha for Lakeventory with scheduled runs and updated branding.
 **Changed**
 - Report title now uses Lakeventory branding
 - Package imports and CLI commands updated to `lakeventory`
-- Docker Compose now loads env vars from `.env`
+- Docker Compose agora usa `.lakeventory/config.yaml` como fonte principal de credenciais
 - Docs reorganized into focused guides (auth, permissions, usage, troubleshooting)
 
 **Fixed**
@@ -135,7 +135,7 @@ First public alpha for Lakeventory with scheduled runs and updated branding.
 ### Migration Notes
 - Update imports to `lakeventory` in custom scripts/tests
 - Use `python -m lakeventory` instead of `python -m databricks_inventory`
-- If using Compose, set variables in `.env` or `docker-compose.yml`
+- If using Compose, mount `.lakeventory` and maintain credentials in `config.yaml`
 
 ### Security
 - N/A

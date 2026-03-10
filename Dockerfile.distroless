@@ -51,6 +51,10 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Note: Distroless runs as nonroot by default (UID 65532)
+# Monte .lakeventory/config.yaml aqui em runtime:
+#   docker run -v $(pwd)/.lakeventory:/app/.lakeventory:ro ...
+VOLUME /app/.lakeventory
+
 # Note: No shell available - cannot use chmod or complex ENTRYPOINT scripts
 
 ENTRYPOINT ["python", "-m", "lakeventory.cli"]

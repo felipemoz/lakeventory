@@ -1,3 +1,7 @@
+# LEGADO/DEPRECATED: use preferencialmente .lakeventory/config.yaml
+# Este arquivo mantém compatibilidade apenas para o CLI legado `multi_workspace_cli`.
+# O fluxo principal (`make inventory-all`) usa .lakeventory/config.yaml.
+#
 # Lakeventory Multi-Workspace Configuration
 # ==========================================
 # Copy this file to workspaces.yaml and configure your workspace details.

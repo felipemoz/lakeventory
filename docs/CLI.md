@@ -133,22 +133,14 @@ lakeventory version --verbose  # Show Python and SDK versions
 
 ## Environment Variables
 
-Set these before running:
+Use these only as optional one-off overrides:
 
 ```bash
 export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 export DATABRICKS_TOKEN=dapi...
-export OUTPUT_DIR=./output
-export CACHE_DIR=.cache/lakeventory
 ```
 
-Or use a `.env` file:
-```bash
-# .env
-DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
-DATABRICKS_TOKEN=dapi...
-OUTPUT_DIR=./output
-```
+> **Recomendado:** configure credenciais em `.lakeventory/config.yaml` com `make setup`.
 
 ---
 
@@ -196,13 +188,9 @@ lakeventory cache clear --force
 ### Example 5: Compare Two Workspaces
 
 ```bash
-# Collect from workspace A
-export DATABRICKS_HOST=https://workspace-a.cloud.databricks.com
-lakeventory collect --out workspace_a.md
-
-# Collect from workspace B
-export DATABRICKS_HOST=https://workspace-b.cloud.databricks.com
-lakeventory collect --out workspace_b.md
+# Configure workspaces in .lakeventory/config.yaml (or via `make setup`), then run:
+lakeventory -w workspace-a --out workspace_a.md
+lakeventory -w workspace-b --out workspace_b.md
 
 # Compare
 lakeventory diff --baseline workspace_a.md --current workspace_b.md --verbose
@@ -229,13 +217,13 @@ Run in Docker:
 
 ```bash
 docker build -t lakeventory .
-docker run -e DATABRICKS_HOST -e DATABRICKS_TOKEN lakeventory collect --out report.md
+docker run --rm -v $(pwd)/.lakeventory:/app/.lakeventory:ro lakeventory collect --out report.md
 ```
 
 With docker-compose:
 
 ```bash
-# Create .env file with credentials
+# Monte o .lakeventory com config.yaml e suba o container
 docker-compose up -d
 ```
 

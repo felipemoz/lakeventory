@@ -1,6 +1,7 @@
 """Asset collection functions for Databricks workspace."""
 
 import base64
+import logging
 import os
 from typing import List, Tuple
 
@@ -9,6 +10,9 @@ from databricks.sdk import WorkspaceClient
 from .lockin import analyze_cloud_lockin, _format_lockin_details
 from .models import Finding
 from .utils import safe_iter, _safe_list_call
+
+
+logger = logging.getLogger(__name__)
 
 
 def _read_notebook_source(client: WorkspaceClient, notebook_path: str, warnings: List[str]) -> str:
@@ -171,7 +175,7 @@ def collect_clusters(
             arn = getattr(prof, "instance_profile_arn", "")
             findings.append(Finding(f"instance-profile:{arn}", "instance_profile", arn))
     elif cloud_provider in ["AZURE", "GCP"] and hasattr(client, "instance_profiles"):
-        warnings.append(f"instance_profiles.list skipped: not available on {cloud_provider}")
+        logger.info("instance_profiles.list skipped: not available on %s", cloud_provider)
 
     # Instance Pools
     for pool in safe_iter(
@@ -296,6 +300,16 @@ def collect_mlflow_assets(
 ) -> List[Finding]:
     """Collect MLflow experiments, models, and versions."""
     findings = []
+
+    def _list_feature_store_items():
+        if hasattr(client, "feature_store") and hasattr(client.feature_store, "list"):
+            return client.feature_store.list()
+        if hasattr(client, "registered_models"):
+            logger.info(
+                "feature_store.list unavailable; using registered_models.list() fallback (Model Registry listmodels)"
+            )
+            return client.registered_models.list()
+        raise AttributeError("Feature Store API and Model Registry fallback not available")
     
     # Experiments
     for exp in safe_iter(
@@ -337,10 +351,10 @@ def collect_mlflow_assets(
                 findings.append(Finding(f"model-version:{model_name}:{version}", "model_version", model_name))
 
     # Feature Store
-    if hasattr(client, "feature_store"):
+    if hasattr(client, "feature_store") or hasattr(client, "registered_models"):
         for fs in safe_iter(
             "feature_store.list",
-            _safe_list_call("feature_store.list", lambda: client.feature_store.list(), warnings),
+            _safe_list_call("feature_store.list", _list_feature_store_items, warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
@@ -621,6 +635,14 @@ def collect_serving_assets(
 ) -> List[Finding]:
     """Collect serving endpoints, vector search, and online tables."""
     findings = []
+
+    def _list_vector_search_endpoints():
+        api = client.vector_search_endpoints
+        if hasattr(api, "list"):
+            return api.list()
+        if hasattr(api, "list_endpoints"):
+            return api.list_endpoints()
+        raise AttributeError("VectorSearchEndpointsAPI has no supported list method")
     
     # Serving Endpoints
     for endpoint in safe_iter(
@@ -637,7 +659,7 @@ def collect_serving_assets(
     if hasattr(client, "vector_search_endpoints"):
         for vse in safe_iter(
             "vector_search_endpoints.list",
-            _safe_list_call("vector_search_endpoints.list", lambda: client.vector_search_endpoints.list(), warnings),
+            _safe_list_call("vector_search_endpoints.list", _list_vector_search_endpoints, warnings),
             warnings,
             batch_size,
             batch_sleep_ms,
