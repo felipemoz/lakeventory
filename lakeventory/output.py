@@ -7,6 +7,18 @@ from .config import KIND_TO_SHEET, SHEET_ORDER
 from .models import Finding
 
 
+def _excel_safe(value):
+    """Convert values to Excel-safe scalar types."""
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    enum_value = getattr(value, "value", None)
+    if enum_value is not None:
+        return str(enum_value)
+    return str(value)
+
+
 def summarize(findings: List[Finding], warnings: List[str]) -> Tuple[str, List[str]]:
     """Generate summary and detailed findings.
     
@@ -86,7 +98,15 @@ def write_excel(findings: List[Finding], warnings: List[str], out_path: Path) ->
     # Populate sheets with findings
     for item in findings:
         sheet_name = KIND_TO_SHEET.get(item.kind, "Workspace Objects")
-        sheets[sheet_name].append([item.kind, item.path, item.notes, item.lockin_count, item.lockin_details])
+        sheets[sheet_name].append(
+            [
+                _excel_safe(item.kind),
+                _excel_safe(item.path),
+                _excel_safe(item.notes),
+                _excel_safe(item.lockin_count),
+                _excel_safe(item.lockin_details),
+            ]
+        )
 
     # Add warnings sheet if needed
     if warnings:
@@ -182,7 +202,15 @@ def write_delta_excel(
     
     for item in delta_findings:
         sheet_name = KIND_TO_SHEET.get(item.kind, "Workspace Objects")
-        sheets[sheet_name].append([item.kind, item.path, item.notes, item.lockin_count, item.lockin_details])
+        sheets[sheet_name].append(
+            [
+                _excel_safe(item.kind),
+                _excel_safe(item.path),
+                _excel_safe(item.notes),
+                _excel_safe(item.lockin_count),
+                _excel_safe(item.lockin_details),
+            ]
+        )
     
     # Warnings sheet
     if warnings:

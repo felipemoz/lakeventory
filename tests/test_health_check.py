@@ -4,6 +4,9 @@ import os
 import sys
 from unittest.mock import patch, MagicMock
 import pytest
+from pathlib import Path
+
+import yaml
 
 
 def test_health_check_missing_databricks_host():
@@ -45,3 +48,81 @@ def test_workspace_client_can_be_instantiated():
     
     # This is just a sanity check that the SDK is properly installed
     assert WorkspaceClient is not None
+
+
+def test_validate_yaml_completeness_ok(tmp_path: Path):
+    from lakeventory.health_check import validate_yaml_completeness
+
+    content = {
+        "version": "1.0",
+        "default_workspace": "dev",
+        "workspaces": {
+            "dev": {
+                "host": "https://adb-123.4.azuredatabricks.net/",
+                "auth_method": "pat",
+                "token": "dapi_x",
+            }
+        },
+        "global_config": {
+            "output_dir": "./_reports",
+            "output_format": "xlsx",
+            "log_level": "info",
+            "timeout": 600,
+            "cache_dir": ".inventory_cache",
+            "progress_enabled": True,
+            "batch_size": 200,
+            "batch_sleep_ms": 50,
+            "include_runs": True,
+            "include_query_history": True,
+            "include_dbfs": False,
+            "backup_workspace": False,
+            "backup_output_dir": "./_backup",
+            "enabled_collectors": ["workspace"],
+            "serverless_collectors": ["workspace"],
+        },
+    }
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(yaml.safe_dump(content), encoding="utf-8")
+
+    ok, issues = validate_yaml_completeness(cfg)
+    assert ok is True
+    assert issues == []
+
+
+def test_validate_yaml_completeness_missing_key(tmp_path: Path):
+    from lakeventory.health_check import validate_yaml_completeness
+
+    content = {
+        "version": "1.0",
+        "default_workspace": "dev",
+        "workspaces": {
+            "dev": {
+                "host": "https://adb-123.4.azuredatabricks.net/",
+                "auth_method": "pat",
+                "token": "dapi_x",
+            }
+        },
+        "global_config": {
+            "output_dir": "./_reports",
+            "output_format": "xlsx",
+            "log_level": "info",
+            # timeout intentionally missing
+            "cache_dir": ".inventory_cache",
+            "progress_enabled": True,
+            "batch_size": 200,
+            "batch_sleep_ms": 50,
+            "include_runs": True,
+            "include_query_history": True,
+            "include_dbfs": False,
+            "backup_workspace": False,
+            "backup_output_dir": "./_backup",
+            "enabled_collectors": ["workspace"],
+            "serverless_collectors": ["workspace"],
+        },
+    }
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(yaml.safe_dump(content), encoding="utf-8")
+
+    ok, issues = validate_yaml_completeness(cfg)
+    assert ok is False
+    assert any("global_config.timeout missing" in issue for issue in issues)

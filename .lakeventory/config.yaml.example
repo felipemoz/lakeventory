@@ -32,6 +32,9 @@ global_config:
   output_dir: ./output  # Default output directory for all workspaces
   output_format: xlsx  # markdown, json, xlsx, all
   log_level: info  # error, info, verbose, debug
+  timeout: 600  # HTTP timeout in seconds for Databricks SDK calls
+  cache_dir: .inventory_cache  # Snapshot/cache directory
+  progress_enabled: true  # Show progress bars during collection
   batch_size: 200
   batch_sleep_ms: 50
   include_runs: false
@@ -50,3 +53,17 @@ global_config:
     - security
     - identities
     - serving
+    - acl
+  serverless_collectors:
+    - workspace
+    - jobs
+    - sql
+    - mlflow
+    - unity_catalog
+    - repos
+    - security
+    - identities
+    - serving
+    - sharing
+    - dbfs
+    - acl

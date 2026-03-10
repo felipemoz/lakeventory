@@ -2,7 +2,6 @@
 
 import base64
 import logging
-import os
 from typing import List, Tuple
 
 from databricks.sdk import WorkspaceClient
@@ -13,6 +12,129 @@ from .utils import safe_iter, _safe_list_call
 
 
 logger = logging.getLogger(__name__)
+
+
+def _serialize_acl_entry(entry) -> str:
+    """Serialize a single ACL entry from permissions/grants responses."""
+    principal = (
+        getattr(entry, "user_name", "")
+        or getattr(entry, "group_name", "")
+        or getattr(entry, "service_principal_name", "")
+        or getattr(entry, "principal", "")
+        or "unknown_principal"
+    )
+
+    permission_names = []
+
+    all_permissions = getattr(entry, "all_permissions", None) or []
+    for perm in all_permissions:
+        perm_name = getattr(perm, "permission_level", None) or getattr(perm, "privilege", None) or str(perm)
+        permission_names.append(str(perm_name))
+
+    direct_privileges = getattr(entry, "privileges", None) or []
+    if direct_privileges:
+        permission_names.extend([str(p) for p in direct_privileges])
+
+    if not permission_names:
+        permission_names.append("NO_PERMISSION_DATA")
+
+    return f"{principal}:{'|'.join(sorted(set(permission_names)))}"
+
+
+def _collect_object_permissions(
+    client: WorkspaceClient,
+    warnings: List[str],
+    request_object_type: str,
+    request_object_id: str,
+    object_ref: str,
+) -> List[Finding]:
+    """Collect ACLs for workspace-level objects using Permissions API."""
+    if not hasattr(client, "permissions") or not hasattr(client.permissions, "get"):
+        return []
+
+    response = None
+    attempts = [
+        lambda: client.permissions.get(
+            request_object_type=request_object_type,
+            request_object_id=request_object_id,
+        ),
+        lambda: client.permissions.get(request_object_type, request_object_id),
+        lambda: client.permissions.get(
+            object_type=request_object_type,
+            object_id=request_object_id,
+        ),
+    ]
+
+    for attempt in attempts:
+        try:
+            response = attempt()
+            break
+        except TypeError:
+            continue
+        except Exception as exc:
+            warnings.append(
+                f"permissions.get failed for {request_object_type}:{request_object_id}: {exc}"
+            )
+            return []
+
+    if response is None:
+        return []
+
+    acl_entries = getattr(response, "access_control_list", None) or []
+    if not acl_entries:
+        return []
+
+    serialized = [_serialize_acl_entry(entry) for entry in acl_entries]
+    return [
+        Finding(
+            path=f"acl:{request_object_type}:{request_object_id}",
+            kind="acl",
+            notes=f"object={object_ref} entries={'; '.join(serialized)}",
+        )
+    ]
+
+
+def _collect_uc_grants(
+    client: WorkspaceClient,
+    warnings: List[str],
+    securable_type: str,
+    full_name: str,
+) -> List[Finding]:
+    """Collect ACLs for Unity Catalog securables using Grants API."""
+    if not hasattr(client, "grants") or not hasattr(client.grants, "get"):
+        return []
+
+    response = None
+    attempts = [
+        lambda: client.grants.get(securable_type=securable_type, full_name=full_name),
+        lambda: client.grants.get(securable_type, full_name),
+    ]
+
+    for attempt in attempts:
+        try:
+            response = attempt()
+            break
+        except TypeError:
+            continue
+        except Exception as exc:
+            warnings.append(f"grants.get failed for {securable_type}:{full_name}: {exc}")
+            return []
+
+    if response is None:
+        return []
+
+    assignments = getattr(response, "privilege_assignments", None) or []
+    if not assignments:
+        return []
+
+    serialized = [_serialize_acl_entry(assignment) for assignment in assignments]
+    return [
+        Finding(
+            path=f"acl:uc:{securable_type}:{full_name}",
+            kind="acl",
+            notes=f"object={full_name} entries={'; '.join(serialized)}",
+        )
+    ]
 
 
 def _read_notebook_source(client: WorkspaceClient, notebook_path: str, warnings: List[str]) -> str:
@@ -58,9 +180,20 @@ def collect_workspace_objects(
             if str(obj_type) == "DIRECTORY":
                 stack.append(obj_path)
                 findings.append(Finding(obj_path, "workspace_dir", "workspace directory"))
+                object_id = str(getattr(obj, "object_id", "") or obj_path)
+                findings.extend(
+                    _collect_object_permissions(
+                        client,
+                        warnings,
+                        "directories",
+                        object_id,
+                        obj_path,
+                    )
+                )
             else:
                 kind = "workspace_notebook" if str(obj_type) == "NOTEBOOK" else "workspace_file"
                 lang = getattr(obj, "language", "unknown")
+                object_id = str(getattr(obj, "object_id", "") or obj_path)
                 if kind == "workspace_notebook":
                     notebook_source = _read_notebook_source(client, obj_path, warnings)
                     analysis = analyze_cloud_lockin(notebook_source)
@@ -73,8 +206,26 @@ def collect_workspace_objects(
                             lockin_details=_format_lockin_details(analysis),
                         )
                     )
+                    findings.extend(
+                        _collect_object_permissions(
+                            client,
+                            warnings,
+                            "notebooks",
+                            object_id,
+                            obj_path,
+                        )
+                    )
                 else:
                     findings.append(Finding(obj_path, kind, f"language: {lang}"))
+                    findings.extend(
+                        _collect_object_permissions(
+                            client,
+                            warnings,
+                            "files",
+                            object_id,
+                            obj_path,
+                        )
+                    )
     
     return findings
 
@@ -99,6 +250,16 @@ def collect_jobs(
         job_id = getattr(job, "job_id", None)
         name = getattr(getattr(job, "settings", None), "name", "")
         findings.append(Finding(f"job:{job_id}", "job", name))
+        if job_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "jobs",
+                    str(job_id),
+                    f"job:{job_id}",
+                )
+            )
 
     if include_runs and hasattr(client.jobs, "list_runs"):
         for run in safe_iter(
@@ -120,11 +281,12 @@ def collect_clusters(
     client: WorkspaceClient,
     warnings: List[str],
     batch_size: int,
-    batch_sleep_ms: int
+    batch_sleep_ms: int,
+    cloud_provider: str = "",
 ) -> List[Finding]:
     """Collect clusters, policies, init scripts, and instance pools."""
     findings = []
-    cloud_provider = os.getenv("DATABRICKS_CLOUD_PROVIDER", "").upper()
+    cloud_provider = (cloud_provider or "").upper()
     
     # Clusters
     for cluster in safe_iter(
@@ -137,6 +299,16 @@ def collect_clusters(
         cluster_id = getattr(cluster, "cluster_id", None)
         name = getattr(cluster, "cluster_name", "")
         findings.append(Finding(f"cluster:{cluster_id}", "cluster", name))
+        if cluster_id:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "clusters",
+                    str(cluster_id),
+                    f"cluster:{cluster_id}",
+                )
+            )
 
     # Cluster policies
     for policy in safe_iter(
@@ -149,6 +321,16 @@ def collect_clusters(
         policy_id = getattr(policy, "policy_id", None)
         name = getattr(policy, "name", "")
         findings.append(Finding(f"cluster-policy:{policy_id}", "cluster_policy", name))
+        if policy_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "cluster-policies",
+                    str(policy_id),
+                    f"cluster-policy:{policy_id}",
+                )
+            )
 
     # Global init scripts
     if hasattr(client, "global_init_scripts"):
@@ -188,6 +370,16 @@ def collect_clusters(
         pool_id = getattr(pool, "instance_pool_id", None)
         name = getattr(pool, "instance_pool_name", "")
         findings.append(Finding(f"instance-pool:{pool_id}", "instance_pool", name))
+        if pool_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "instance-pools",
+                    str(pool_id),
+                    f"instance-pool:{pool_id}",
+                )
+            )
     
     return findings
 
@@ -215,6 +407,16 @@ def collect_sql_assets(
         serverless = getattr(wh, "enable_serverless_compute", None)
         notes = f"{name} | serverless={serverless}"
         findings.append(Finding(f"sql-warehouse:{wh_id}", "sql_warehouse", notes))
+        if wh_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "warehouses",
+                    str(wh_id),
+                    f"sql-warehouse:{wh_id}",
+                )
+            )
 
     # Pipelines (Delta Live Tables)
     for pipeline in safe_iter(
@@ -227,6 +429,16 @@ def collect_sql_assets(
         pipeline_id = getattr(pipeline, "pipeline_id", None)
         name = getattr(pipeline, "name", "")
         findings.append(Finding(f"pipeline:{pipeline_id}", "pipeline", name))
+        if pipeline_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "pipelines",
+                    str(pipeline_id),
+                    f"pipeline:{pipeline_id}",
+                )
+            )
 
     # SQL Dashboards
     for dash in safe_iter(
@@ -239,6 +451,16 @@ def collect_sql_assets(
         dash_id = getattr(dash, "id", None)
         name = getattr(dash, "name", "")
         findings.append(Finding(f"sql-dashboard:{dash_id}", "sql_dashboard", name))
+        if dash_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "dashboards",
+                    str(dash_id),
+                    f"sql-dashboard:{dash_id}",
+                )
+            )
 
     # Lakeview Dashboards
     for dash in safe_iter(
@@ -263,6 +485,16 @@ def collect_sql_assets(
         query_id = getattr(query, "id", None)
         name = getattr(query, "name", "") or getattr(query, "display_name", "")
         findings.append(Finding(f"sql-query:{query_id}", "sql_query", name))
+        if query_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "queries",
+                    str(query_id),
+                    f"sql-query:{query_id}",
+                )
+            )
 
     # Query History
     if include_query_history and hasattr(client, "query_history"):
@@ -288,6 +520,16 @@ def collect_sql_assets(
         alert_id = getattr(alert, "id", None)
         name = getattr(alert, "name", "") or getattr(alert, "display_name", "")
         findings.append(Finding(f"sql-alert:{alert_id}", "sql_alert", name))
+        if alert_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "alerts",
+                    str(alert_id),
+                    f"sql-alert:{alert_id}",
+                )
+            )
     
     return findings
 
@@ -395,6 +637,7 @@ def collect_unity_catalog(
     ):
         catalog_name = getattr(catalog_obj, "name", "")
         findings.append(Finding(f"uc-catalog:{catalog_name}", "uc_catalog", catalog_name))
+        findings.extend(_collect_uc_grants(client, warnings, "CATALOG", catalog_name))
 
         # Schemas
         for schema in safe_iter(
@@ -406,6 +649,8 @@ def collect_unity_catalog(
         ):
             schema_name = getattr(schema, "name", "")
             findings.append(Finding(f"uc-schema:{catalog_name}.{schema_name}", "uc_schema", schema_name))
+            schema_full_name = f"{catalog_name}.{schema_name}"
+            findings.extend(_collect_uc_grants(client, warnings, "SCHEMA", schema_full_name))
 
             # Tables
             for table in safe_iter(
@@ -427,6 +672,8 @@ def collect_unity_catalog(
                         getattr(table, "table_type", ""),
                     )
                 )
+                table_full_name = f"{catalog_name}.{schema_name}.{table_name}"
+                findings.extend(_collect_uc_grants(client, warnings, "TABLE", table_full_name))
 
             # Volumes
             for vol in safe_iter(
@@ -442,6 +689,8 @@ def collect_unity_catalog(
             ):
                 vol_name = getattr(vol, "name", "")
                 findings.append(Finding(f"uc-volume:{vol_name}", "uc_volume", vol_name))
+                volume_full_name = f"{catalog_name}.{schema_name}.{vol_name}"
+                findings.extend(_collect_uc_grants(client, warnings, "VOLUME", volume_full_name))
     
     # External Locations
     for eloc in safe_iter(
@@ -454,6 +703,7 @@ def collect_unity_catalog(
         name = getattr(eloc, "name", "")
         url = getattr(eloc, "url", "")
         findings.append(Finding(f"external-location:{name}", "external_location", url))
+        findings.extend(_collect_uc_grants(client, warnings, "EXTERNAL_LOCATION", name))
 
     # Storage Credentials
     for cred in safe_iter(
@@ -465,6 +715,7 @@ def collect_unity_catalog(
     ):
         name = getattr(cred, "name", "")
         findings.append(Finding(f"storage-credential:{name}", "storage_credential", name))
+        findings.extend(_collect_uc_grants(client, warnings, "STORAGE_CREDENTIAL", name))
 
     # Connections
     for conn in safe_iter(
@@ -477,6 +728,7 @@ def collect_unity_catalog(
         name = getattr(conn, "name", "")
         type_name = getattr(conn, "connection_type", "")
         findings.append(Finding(f"connection:{name}", "connection", str(type_name)))
+        findings.extend(_collect_uc_grants(client, warnings, "CONNECTION", name))
 
     # Metastores
     if hasattr(client, "metastores"):
@@ -490,6 +742,8 @@ def collect_unity_catalog(
             name = getattr(ms, "name", "")
             ms_id = getattr(ms, "metastore_id", "")
             findings.append(Finding(f"metastore:{ms_id}", "metastore", name))
+            if ms_id:
+                findings.extend(_collect_uc_grants(client, warnings, "METASTORE", str(ms_id)))
     
     return findings
 
@@ -514,6 +768,16 @@ def collect_repos(
         repo_id = getattr(repo, "id", None)
         path = getattr(repo, "path", "")
         findings.append(Finding(f"repo:{repo_id}", "repo", path))
+        if repo_id is not None:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "repos",
+                    str(repo_id),
+                    f"repo:{repo_id}",
+                )
+            )
 
     # Git Credentials
     if hasattr(client, "git_credentials"):
@@ -550,6 +814,27 @@ def collect_security_assets(
     ):
         name = getattr(scope, "name", "")
         findings.append(Finding(f"secret-scope:{name}", "secret_scope", name))
+        if hasattr(client.secrets, "list_acls"):
+            for acl in safe_iter(
+                f"secrets.list_acls({name})",
+                _safe_list_call(
+                    f"secrets.list_acls({name})",
+                    lambda sn=name: client.secrets.list_acls(scope=sn),
+                    warnings,
+                ),
+                warnings,
+                batch_size,
+                batch_sleep_ms,
+            ):
+                principal = getattr(acl, "principal", "")
+                permission = getattr(acl, "permission", "")
+                findings.append(
+                    Finding(
+                        f"acl:secret-scope:{name}:{principal}",
+                        "acl",
+                        f"object=secret-scope:{name} entries={principal}:{permission}",
+                    )
+                )
 
     # Tokens
     for token in safe_iter(
@@ -654,6 +939,16 @@ def collect_serving_assets(
     ):
         name = getattr(endpoint, "name", "")
         findings.append(Finding(f"serving-endpoint:{name}", "serving_endpoint", name))
+        if name:
+            findings.extend(
+                _collect_object_permissions(
+                    client,
+                    warnings,
+                    "serving-endpoints",
+                    str(name),
+                    f"serving-endpoint:{name}",
+                )
+            )
 
     # Vector Search Endpoints
     if hasattr(client, "vector_search_endpoints"):
@@ -767,6 +1062,63 @@ def collect_dbfs(
     return findings
 
 
+def collect_acl_assets(
+    client: WorkspaceClient,
+    warnings: List[str],
+    batch_size: int,
+    batch_sleep_ms: int,
+) -> List[Finding]:
+    """Collect ACL findings only across supported services."""
+    acl_findings: List[Finding] = []
+
+    acl_findings.extend(
+        [f for f in collect_workspace_objects(client, warnings, batch_size, batch_sleep_ms) if f.kind == "acl"]
+    )
+    acl_findings.extend(
+        [
+            f
+            for f in collect_jobs(
+                client,
+                include_runs=False,
+                warnings=warnings,
+                batch_size=batch_size,
+                batch_sleep_ms=batch_sleep_ms,
+            )
+            if f.kind == "acl"
+        ]
+    )
+    acl_findings.extend(
+        [f for f in collect_clusters(client, warnings, batch_size, batch_sleep_ms) if f.kind == "acl"]
+    )
+    acl_findings.extend(
+        [
+            f
+            for f in collect_sql_assets(
+                client,
+                include_query_history=False,
+                warnings=warnings,
+                batch_size=batch_size,
+                batch_sleep_ms=batch_sleep_ms,
+            )
+            if f.kind == "acl"
+        ]
+    )
+    acl_findings.extend(
+        [f for f in collect_unity_catalog(client, warnings, batch_size, batch_sleep_ms) if f.kind == "acl"]
+    )
+    acl_findings.extend(
+        [f for f in collect_repos(client, warnings, batch_size, batch_sleep_ms) if f.kind == "acl"]
+    )
+    acl_findings.extend(
+        [f for f in collect_security_assets(client, warnings, batch_size, batch_sleep_ms) if f.kind == "acl"]
+    )
+    acl_findings.extend(
+        [f for f in collect_serving_assets(client, warnings, batch_size, batch_sleep_ms) if f.kind == "acl"]
+    )
+
+    return acl_findings
+
+
 COLLECTOR_REGISTRY = {
     "workspace": collect_workspace_objects,
     "jobs": collect_jobs,
@@ -780,6 +1132,7 @@ COLLECTOR_REGISTRY = {
     "serving": collect_serving_assets,
     "sharing": collect_sharing,
     "dbfs": collect_dbfs,
+    "acl": collect_acl_assets,
 }
 
 
@@ -790,6 +1143,7 @@ def collect_all_findings(
     include_dbfs: bool,
     batch_size: int,
     batch_sleep_ms: int,
+    cloud_provider: str = "",
 ) -> Tuple[List[Finding], List[str]]:
     """Collect all findings from Databricks workspace.
     
@@ -810,7 +1164,7 @@ def collect_all_findings(
     # Collect from all sources
     all_findings.extend(collect_workspace_objects(client, warnings, batch_size, batch_sleep_ms))
     all_findings.extend(collect_jobs(client, include_runs, warnings, batch_size, batch_sleep_ms))
-    all_findings.extend(collect_clusters(client, warnings, batch_size, batch_sleep_ms))
+    all_findings.extend(collect_clusters(client, warnings, batch_size, batch_sleep_ms, cloud_provider))
     all_findings.extend(collect_sql_assets(client, include_query_history, warnings, batch_size, batch_sleep_ms))
     all_findings.extend(collect_mlflow_assets(client, warnings, batch_size, batch_sleep_ms))
     all_findings.extend(collect_unity_catalog(client, warnings, batch_size, batch_sleep_ms))
@@ -833,6 +1187,7 @@ def collect_findings_selective(
     include_query_history: bool,
     batch_size: int,
     batch_sleep_ms: int,
+    cloud_provider: str = "",
 ) -> Tuple[List[Finding], List[str]]:
     """Collect findings from selected collectors only.
     
@@ -861,6 +1216,8 @@ def collect_findings_selective(
         
         if name == "jobs":
             all_findings.extend(collector_fn(client, include_runs, warnings, batch_size, batch_sleep_ms))
+        elif name == "clusters":
+            all_findings.extend(collector_fn(client, warnings, batch_size, batch_sleep_ms, cloud_provider))
         elif name == "sql":
             all_findings.extend(collector_fn(client, include_query_history, warnings, batch_size, batch_sleep_ms))
         else:

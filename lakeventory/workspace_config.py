@@ -53,6 +53,9 @@ class GlobalConfig:
     output_dir: str = "./output"
     output_format: str = "xlsx"  # markdown, json, xlsx, all
     log_level: str = "info"  # error, info, verbose, debug
+    timeout: int = 600  # seconds
+    cache_dir: str = ".inventory_cache"
+    progress_enabled: bool = True
     batch_size: int = 200
     batch_sleep_ms: int = 50
     include_runs: bool = False
@@ -62,7 +65,11 @@ class GlobalConfig:
     backup_output_dir: str = ""
     enabled_collectors: List[str] = field(default_factory=lambda: [
         "workspace", "jobs", "clusters", "sql", "mlflow", 
-        "unity_catalog", "repos", "security", "identities", "serving"
+        "unity_catalog", "repos", "security", "identities", "serving", "acl"
+    ])
+    serverless_collectors: List[str] = field(default_factory=lambda: [
+        "workspace", "jobs", "sql", "mlflow", "unity_catalog",
+        "repos", "security", "identities", "serving", "sharing", "dbfs", "acl"
     ])
 
 
@@ -104,14 +111,25 @@ class LakeventoryConfig:
         """Save configuration to YAML file."""
         config_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Convert to dict, filtering out None values and secrets
+        # Convert to dict, preserving optional fields with explicit empty values.
+        # This ensures setup-generated YAML is fully populated, even for optional keys.
         workspaces_dict = {}
+        workspace_fields = [
+            "host",
+            "auth_method",
+            "description",
+            "output_dir",
+            "token",
+            "client_id",
+            "client_secret",
+            "tenant_id",
+        ]
         for name, ws in self.workspaces.items():
-            ws_dict = asdict(ws)
-            # Remove name field (it's the key)
-            ws_dict.pop("name", None)
-            # Filter None values
-            ws_dict = {k: v for k, v in ws_dict.items() if v is not None}
+            ws_raw = asdict(ws)
+            ws_dict = {}
+            for field_name in workspace_fields:
+                value = ws_raw.get(field_name)
+                ws_dict[field_name] = "" if value is None else value
             workspaces_dict[name] = ws_dict
         
         data = {

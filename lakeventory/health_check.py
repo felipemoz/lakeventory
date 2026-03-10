@@ -3,17 +3,81 @@
 import argparse
 import re
 import sys
+from dataclasses import fields as dataclass_fields
 from itertools import islice
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
 from databricks.sdk import WorkspaceClient
+import yaml
 
-from lakeventory.workspace_config import ConfigManager, WorkspaceConfig
+from lakeventory.workspace_config import ConfigManager, WorkspaceConfig, GlobalConfig
 
 
 CONFIG_MANAGER = ConfigManager()
+
+
+def validate_yaml_completeness(config_path: Path, workspace_name: Optional[str] = None) -> Tuple[bool, List[str]]:
+    """Validate whether required YAML keys are explicitly present and filled."""
+    issues: List[str] = []
+
+    if not config_path.exists():
+        return False, [f"config file not found: {config_path}"]
+
+    with open(config_path, "r") as f:
+        raw = yaml.safe_load(f) or {}
+
+    global_cfg = raw.get("global_config", {}) or {}
+    required_global_keys = [field.name for field in dataclass_fields(GlobalConfig)]
+    for key in required_global_keys:
+        if key not in global_cfg:
+            issues.append(f"global_config.{key} missing in YAML")
+
+    # Semantic checks for critical global fields
+    if "enabled_collectors" in global_cfg:
+        if not isinstance(global_cfg.get("enabled_collectors"), list) or not global_cfg.get("enabled_collectors"):
+            issues.append("global_config.enabled_collectors must be a non-empty list")
+    if "serverless_collectors" in global_cfg:
+        if not isinstance(global_cfg.get("serverless_collectors"), list) or not global_cfg.get("serverless_collectors"):
+            issues.append("global_config.serverless_collectors must be a non-empty list")
+    if "timeout" in global_cfg:
+        try:
+            timeout = int(global_cfg.get("timeout"))
+            if timeout <= 0:
+                issues.append("global_config.timeout must be > 0")
+        except Exception:
+            issues.append("global_config.timeout must be an integer")
+
+    workspaces = raw.get("workspaces", {}) or {}
+    if not workspaces:
+        issues.append("workspaces section is empty")
+        return False, issues
+
+    workspace_items = (
+        {workspace_name: workspaces.get(workspace_name)} if workspace_name else workspaces
+    )
+
+    for name, ws in workspace_items.items():
+        if ws is None:
+            issues.append(f"workspace '{name}' not found in YAML")
+            continue
+
+        if not ws.get("host"):
+            issues.append(f"workspaces.{name}.host missing or empty")
+        auth_method = ws.get("auth_method")
+        if not auth_method:
+            issues.append(f"workspaces.{name}.auth_method missing or empty")
+            continue
+
+        if auth_method == "pat" and not ws.get("token"):
+            issues.append(f"workspaces.{name}.token missing or empty for pat auth")
+        if auth_method == "service_principal":
+            for key in ("client_id", "client_secret"):
+                if not ws.get(key):
+                    issues.append(f"workspaces.{name}.{key} missing or empty for service_principal auth")
+
+    return len(issues) == 0, issues
 
 
 def _extract_workspace_id(host: str) -> str:
@@ -112,6 +176,14 @@ def run_health_check(workspace_name: Optional[str] = None) -> bool:
             print(f"  ❌ Nenhum workspace configurado em: {config_path}")
             print("  ℹ️  Run: make setup")
         return False
+
+    yaml_ok, yaml_issues = validate_yaml_completeness(config_path, workspace_name)
+    if not yaml_ok:
+        print("  ❌ YAML completeness validation failed:")
+        for issue in yaml_issues:
+            print(f"    - {issue}")
+        return False
+    print("  ✅ YAML completeness: all required keys present")
 
     print(f"  ✅ Config file: {config_path}")
     print(f"  ✅ Workspace: {workspace.name}")

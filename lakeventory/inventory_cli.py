@@ -3,7 +3,6 @@
 import argparse
 import copy
 import logging
-import os
 import re
 import sys
 from datetime import datetime
@@ -11,9 +10,10 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from lakeventory.cache import InventoryCache
-from lakeventory.client import build_workspace_client
+from lakeventory.client import build_workspace_client_with_config
 from lakeventory.collectors import collect_all_findings, collect_findings_selective
 from lakeventory.logging_config import configure_logging
+from lakeventory.utils import set_progress_enabled
 from lakeventory.output import (
     write_delta_excel,
     write_delta_markdown,
@@ -26,6 +26,14 @@ from lakeventory.workspace_config import ConfigManager, WorkspaceConfig
 
 
 logger = logging.getLogger(__name__)
+
+
+def _visible_workspace_names(config) -> list:
+    """Return workspace names excluding legacy 'default' alias when named envs exist."""
+    names = list(config.workspaces.keys())
+    if "default" in names and len(names) > 1:
+        names = [name for name in names if name != "default"]
+    return names
 
 
 def _workspace_signature(workspace: WorkspaceConfig) -> tuple:
@@ -59,6 +67,15 @@ def _apply_workspace_id(name: str, workspace_id: str) -> str:
     if path.stem in {"workspace_id", workspace_id}:
         return f"{workspace_id}{path.suffix}"
     return f"{workspace_id}_{path.stem}{path.suffix}"
+
+
+def _infer_cloud_provider(host: str) -> str:
+    value = (host or "").lower()
+    if "azuredatabricks.net" in value:
+        return "AZURE"
+    if "cloud.databricks.com" in value or "databricks.com" in value:
+        return "AWS"
+    return ""
 
 
 
@@ -98,6 +115,9 @@ def _apply_config_defaults(args, config) -> None:
             args.out_xlsx = "workspace_id.xlsx"
         else:
             args.out_xlsx = "workspace_id.xlsx"
+
+    if not args.cache_dir:
+        args.cache_dir = getattr(global_cfg, "cache_dir", ".inventory_cache")
 
 
 def main() -> int:
@@ -183,8 +203,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--cache-dir",
-        default=".inventory_cache",
-        help="Directory to store cache/snapshots (default: .inventory_cache)",
+        default="",
+        help="Directory to store cache/snapshots (empty = use global_config.cache_dir from config.yaml)",
     )
     parser.add_argument(
         "--log-level",
@@ -226,7 +246,6 @@ def main() -> int:
 
     resolved_log_level = (
         args.log_level
-        or os.getenv("INVENTORY_LOG_LEVEL", "").strip().lower()
         or getattr(config.global_config, "log_level", "info")
         or "info"
     )
@@ -236,13 +255,15 @@ def main() -> int:
     
     # Handle --list-workspaces
     if args.list_workspaces:
-        if not config.workspaces:
+        names = _visible_workspace_names(config)
+        if not names:
             print("No workspaces configured. Run 'lakeventory setup' to add workspaces.")
             return 0
         
         print(f"\n{'Name':<15} {'Host':<45} {'Auth Method':<20}")
         print('─' * 85)
-        for name, ws in config.workspaces.items():
+        for name in names:
+            ws = config.workspaces[name]
             default_marker = " *" if name == config.default_workspace else ""
             host_short = ws.host.replace('https://', '')[:43]
             print(f"{name:<15}{default_marker:<2} {host_short:<43} {ws.auth_method:<18}")
@@ -253,20 +274,14 @@ def main() -> int:
     
     # Handle --all-workspaces
     if args.all_workspaces:
-        if not config.workspaces:
+        workspace_names = _visible_workspace_names(config)
+        if not workspace_names:
             logger.error("No workspaces configured. Run 'lakeventory setup' first.")
             return 1
         
-        logger.info("Running inventory on all %d workspaces", len(config.workspaces))
+        logger.info("Running inventory on all %d workspaces", len(workspace_names))
 
         seen_signatures = set()
-        
-        workspace_names = list(config.workspaces.keys())
-        # For inventory-all, keep business/workload names first and process the
-        # alias workspace "default" last. This ensures deduplication keeps names
-        # like "prod" and skips "default" when both point to the same target.
-        if "default" in workspace_names:
-            workspace_names = [name for name in workspace_names if name != "default"] + ["default"]
 
         for workspace_name in workspace_names:
             workspace = config.get_workspace(workspace_name)
@@ -316,9 +331,6 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
             return 1
         
         logger.info("Using workspace: %s (%s)", workspace_name, workspace.host)
-        config_manager = ConfigManager()
-        config_manager.apply_workspace_env(workspace)
-        
         # In multi-workspace mode, always organize outputs by workspace directory.
         # Base directory priority: CLI --out-dir > workspace.output_dir > global output_dir.
         base_output_dir = args.out_dir or workspace.output_dir or config.global_config.output_dir
@@ -327,6 +339,10 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
         args.out_dir = str(workspace_output_dir)
 
     root = Path(args.root).resolve()
+
+    progress_enabled = getattr(config.global_config, "progress_enabled", True)
+    set_progress_enabled(progress_enabled)
+    timeout_seconds = getattr(config.global_config, "timeout", None)
 
     # Output directory: CLI > workspace.output_dir (already in args.out_dir) > global_config > default
     output_dir_str = args.out_dir or getattr(config.global_config, "output_dir", "output") or "output"
@@ -342,9 +358,20 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
 
     # Build client and collect findings
     logger.info("Connecting to Databricks workspace...")
-    client = build_workspace_client(root)
+    workspace = config.get_workspace(workspace_name) if workspace_name else None
+    client = build_workspace_client_with_config(
+        root,
+        host=getattr(workspace, "host", None),
+        token=getattr(workspace, "token", None),
+        client_id=getattr(workspace, "client_id", None),
+        client_secret=getattr(workspace, "client_secret", None),
+        timeout_seconds=timeout_seconds,
+    )
 
-    workspace_id = _extract_workspace_id(os.getenv("DATABRICKS_HOST", ""))
+    workspace_obj = config.get_workspace(workspace_name) if workspace_name else None
+    workspace_host = getattr(workspace_obj, "host", "") if workspace_obj else ""
+    workspace_id = _extract_workspace_id(workspace_host)
+    cloud_provider = _infer_cloud_provider(workspace_host)
     logger.info("Using workspace_id: %s", workspace_id)
 
     backup_enabled = bool(args.backup_workspace) or bool(
@@ -380,7 +407,7 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
     # Validate permissions (always run unless explicitly skipped)
     if not args.skip_validation:
         logger.info("Validating user permissions...")
-        validator = PermissionsValidator(client)
+        validator = PermissionsValidator(client, cloud_provider=cloud_provider)
         all_passed, results, warnings_perms = validator.validate_all(exclude_heavy=not args.include_dbfs)
         print(validator.format_report())
         
@@ -395,12 +422,17 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
     logger.info("Collecting inventory...")
     if args.serverless and not args.collectors:
         # In serverless mode, skip cluster-related collectors by default
-        collectors_list = "workspace,jobs,sql,mlflow,unity_catalog,repos,security,identities,serving,sharing,dbfs"
+        collectors_cfg = getattr(config.global_config, "serverless_collectors", None) or [
+            "workspace", "jobs", "sql", "mlflow", "unity_catalog",
+            "repos", "security", "identities", "serving", "sharing", "dbfs", "acl"
+        ]
+        collectors_list = ",".join(collectors_cfg)
         findings, warnings = collect_findings_selective(
             client,
             collectors=collectors_list,
             include_runs=args.include_runs,
             include_query_history=args.include_query_history,
+            cloud_provider=cloud_provider,
             batch_size=args.batch_size,
             batch_sleep_ms=args.batch_sleep_ms,
         )
@@ -410,6 +442,7 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
             collectors=args.collectors,
             include_runs=args.include_runs,
             include_query_history=args.include_query_history,
+            cloud_provider=cloud_provider,
             batch_size=args.batch_size,
             batch_sleep_ms=args.batch_sleep_ms,
         )
@@ -419,6 +452,7 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
             include_runs=args.include_runs,
             include_query_history=args.include_query_history,
             include_dbfs=args.include_dbfs,
+            cloud_provider=cloud_provider,
             batch_size=args.batch_size,
             batch_sleep_ms=args.batch_sleep_ms,
         )

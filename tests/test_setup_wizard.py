@@ -7,6 +7,7 @@ from lakeventory.setup_wizard import (
     validate_workspace_url,
     _extract_workspace_id,
     _build_workspace_client,
+    edit_workspace_wizard,
 )
 from lakeventory.workspace_config import WorkspaceConfig
 
@@ -148,21 +149,18 @@ class TestBuildWorkspaceClient:
 
 
 class TestReadSecret:
-    """Tests for read_secret function (environment variable fallback)."""
-    
+    """Tests for read_secret function."""
+
     @patch.dict('os.environ', {'DATABRICKS_TOKEN': 'env-token'})
-    @patch('lakeventory.setup_wizard.getpass.getpass')
-    @patch('lakeventory.setup_wizard.input', return_value='')  # User presses Enter
-    def test_read_from_env_var(self, mock_input, mock_getpass):
-        """Test reading secret from environment variable."""
+    @patch('lakeventory.setup_wizard.getpass.getpass', return_value='typed-secret')
+    def test_read_from_env_var(self, mock_getpass):
+        """Environment variables are ignored; secret is read via prompt."""
         from lakeventory.setup_wizard import read_secret
-        
-        # read_secret always prompts, but user can press Enter to use env var
+
         result = read_secret("Enter token", "DATABRICKS_TOKEN")
-        
-        assert result == "env-token"
-        mock_input.assert_called_once()  # Prompts for confirmation
-        mock_getpass.assert_not_called()  # Doesn't need getpass if user chose env
+
+        assert result == "typed-secret"
+        mock_getpass.assert_called_once_with("Enter token: ")
     
     @patch.dict('os.environ', {}, clear=True)
     @patch('lakeventory.setup_wizard.getpass.getpass', return_value='typed-secret')
@@ -358,3 +356,65 @@ class TestIntegrationScenarios:
         assert "dev" in final.workspaces
         assert "staging" not in final.workspaces
         assert final.default_workspace == "prod"
+
+
+class TestEditWorkspaceWizard:
+    """Tests for edit workspace flow."""
+
+    @patch("lakeventory.setup_wizard.test_connection", return_value={"workspace_id": "1", "user_name": "u"})
+    def test_edit_workspace_keep_and_update_fields(self, _mock_conn):
+        from lakeventory.workspace_config import LakeventoryConfig, WorkspaceConfig
+
+        config = LakeventoryConfig(
+            default_workspace="dev",
+            workspaces={
+                "dev": WorkspaceConfig(
+                    name="dev",
+                    host="https://old-host",
+                    auth_method="pat",
+                    token="old-token",
+                    description="old desc",
+                )
+            },
+        )
+
+        inputs = iter(
+            [
+                "dev",                # workspace name
+                "https://new-host",   # host
+                "new desc",           # description
+                "./new-out",          # output dir
+                "",                   # keep auth method
+                "n",                  # do not update token
+            ]
+        )
+
+        with patch("lakeventory.setup_wizard.input", side_effect=lambda *_: next(inputs)):
+            ok = edit_workspace_wizard(config)
+
+        assert ok is True
+        ws = config.workspaces["dev"]
+        assert ws.host == "https://new-host"
+        assert ws.description == "new desc"
+        assert ws.output_dir == "./new-out"
+        assert ws.token == "old-token"
+
+    def test_edit_workspace_not_found(self):
+        from lakeventory.workspace_config import LakeventoryConfig, WorkspaceConfig
+
+        config = LakeventoryConfig(
+            default_workspace="dev",
+            workspaces={
+                "dev": WorkspaceConfig(
+                    name="dev",
+                    host="https://host",
+                    auth_method="pat",
+                    token="token",
+                )
+            },
+        )
+
+        with patch("lakeventory.setup_wizard.input", return_value="prod"):
+            ok = edit_workspace_wizard(config)
+
+        assert ok is False

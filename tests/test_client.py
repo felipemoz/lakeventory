@@ -9,10 +9,11 @@ class FakeWorkspaceClient:
 
 def test_build_workspace_client_token(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(client, "WorkspaceClient", FakeWorkspaceClient)
-    monkeypatch.setenv("DATABRICKS_HOST", "https://example")
-    monkeypatch.setenv("DATABRICKS_TOKEN", "abc123")
-
-    wc = client.build_workspace_client(tmp_path)
+    wc = client.build_workspace_client_with_config(
+        tmp_path,
+        host="https://example",
+        token="abc123",
+    )
 
     assert isinstance(wc, FakeWorkspaceClient)
     assert wc.kwargs["host"] == "https://example"
@@ -20,11 +21,8 @@ def test_build_workspace_client_token(monkeypatch, tmp_path: Path):
 
 
 def test_build_workspace_client_missing_host(tmp_path: Path, monkeypatch):
-    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
-    monkeypatch.setenv("DATABRICKS_TOKEN", "abc123")
-
     try:
-        client.build_workspace_client(tmp_path)
+        client.build_workspace_client_with_config(tmp_path, token="abc123")
         assert False, "Expected RuntimeError"
     except RuntimeError as exc:
         assert "DATABRICKS_HOST" in str(exc)
@@ -32,14 +30,33 @@ def test_build_workspace_client_missing_host(tmp_path: Path, monkeypatch):
 def test_build_workspace_client_service_principal(monkeypatch, tmp_path: Path):
     """Test building WorkspaceClient with Service Principal."""
     monkeypatch.setattr(client, "WorkspaceClient", FakeWorkspaceClient)
-    monkeypatch.setenv("DATABRICKS_HOST", "https://example")
-    monkeypatch.setenv("DATABRICKS_CLIENT_ID", "abc123")
-    monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "xyz789")
-    
-    wc = client.build_workspace_client(tmp_path)
+    wc = client.build_workspace_client_with_config(
+        tmp_path,
+        host="https://example",
+        client_id="abc123",
+        client_secret="xyz789",
+    )
     
     assert isinstance(wc, FakeWorkspaceClient)
     assert wc.kwargs["host"] == "https://example"
     assert wc.kwargs["client_id"] == "abc123"
     assert wc.kwargs["client_secret"] == "xyz789"
+
+
+def test_build_workspace_client_with_config_explicit_pat(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(client, "WorkspaceClient", FakeWorkspaceClient)
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+    monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
+
+    wc = client.build_workspace_client_with_config(
+        tmp_path,
+        host="https://explicit-host",
+        token="explicit-token",
+        timeout_seconds=123,
+    )
+
+    assert isinstance(wc, FakeWorkspaceClient)
+    assert wc.kwargs["host"] == "https://explicit-host"
+    assert wc.kwargs["token"] == "explicit-token"
+    assert wc.kwargs["http_timeout_seconds"] == 123
 

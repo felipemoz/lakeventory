@@ -1,7 +1,6 @@
 """Utility functions for safe API calls and iteration."""
 
 import logging
-import os
 import time
 from typing import List
 
@@ -12,6 +11,13 @@ except Exception:
 
 
 logger = logging.getLogger(__name__)
+_PROGRESS_ENABLED = True
+
+
+def set_progress_enabled(enabled: bool) -> None:
+    """Set progress-bar enablement globally for this process."""
+    global _PROGRESS_ENABLED
+    _PROGRESS_ENABLED = bool(enabled)
 
 
 def _is_expected_skip(exc: Exception) -> bool:
@@ -28,7 +34,7 @@ def _is_expected_skip(exc: Exception) -> bool:
 
 def _progress_enabled() -> bool:
     """Return True when progress bars should be shown."""
-    return os.getenv("INVENTORY_PROGRESS", "1") not in {"0", "false", "False", "no", "NO"}
+    return _PROGRESS_ENABLED
 
 
 def safe_iter(label: str, iterator, warnings: List[str], batch_size: int, sleep_ms: int):
