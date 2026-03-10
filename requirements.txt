@@ -2,3 +2,4 @@ databricks-sdk
 openpyxl
 pytest
 tqdm
+pyyaml

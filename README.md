@@ -1,24 +1,42 @@
 # Lakeventory
 
-Automated discovery and inventory of Databricks workspace assets and dependencies. Exports to Markdown or Excel with cloud provider detection and workspace ID auto-sensing.
+Automated discovery and inventory of Databricks workspace assets and dependencies. Supports **multi-workspace management** with interactive setup wizard. Exports to Excel (default), Markdown, or JSON with cloud provider detection and workspace ID auto-sensing.
 
 ## Quick Start
 
+### Single Workspace (Legacy)
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run basic inventory
-python -m lakeventory --source sdk --out report.md
+# Run basic inventory (exports to Excel by default)
+python -m lakeventory --source sdk
 
-# Or with Excel output
-python -m lakeventory --source sdk --out-xlsx report.xlsx
+# Or with Markdown output
+python -m lakeventory --source sdk --out report.md
+```
+
+### Multi-Workspace (Recommended)
+```bash
+# Interactive setup wizard
+make setup
+# or: python -m lakeventory setup
+
+# List configured workspaces
+make list-workspaces
+
+# Run on specific workspace
+make inventory-workspace WORKSPACE=prod
+
+# Run on all workspaces
+make inventory-all
 ```
 
 **Via Makefile:**
 ```bash
 make check       # Verify setup
-make inventory   # Generate report
+make setup       # Interactive workspace configuration
+make inventory   # Generate report (default workspace)
 ```
 
 ---
@@ -43,6 +61,7 @@ make inventory   # Generate report
 | Topic | Link |
 |-------|------|
 | **Getting Started** | [Quick Start Guide](#quick-start) |
+| **Multi-Workspace Setup** | [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md) ✨ **NEW** |
 | **Authentication** | [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) |
 | **Permissions** | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
 | **Usage Examples** | [docs/USAGE.md](docs/USAGE.md) |
@@ -63,7 +82,25 @@ pip install -r requirements.txt
 
 ## Configuration
 
-### Create `.env` file
+### Option 1: Multi-Workspace (Recommended)
+
+Use the interactive setup wizard to configure multiple workspaces:
+
+```bash
+make setup
+```
+
+Configuration is stored in `.lakeventory/config.yaml` with support for:
+- Multiple workspaces (dev, staging, prod)
+- PAT tokens or Service Principal authentication
+- Workspace-specific output directories
+- Global settings (format: xlsx, batch size, collectors)
+
+**See [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md)** for complete guide.
+
+### Option 2: Single Workspace (Legacy)
+
+Create `.env` file for single workspace:
 
 ```env
 DATABRICKS_HOST=https://<workspace-host>
@@ -71,7 +108,7 @@ DATABRICKS_TOKEN=<your-pat-token>
 OUTPUT_DIR=./output
 ```
 
-**See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** for other auth methods (Service Principal, Basic Auth).
+**See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** for other auth methods (Service Principal).
 
 ---
 
@@ -132,12 +169,28 @@ Reports include:
 - Summary counts by asset type
 - Full listing of workspace assets
 - Warnings for API errors or permission issues
-- Excel sheets for easy browsing and filtering
+- Excel sheets (default) for easy browsing and filtering
 
+### Single Workspace
 Files are automatically timestamped and include workspace ID:
 ```
-output/<workspace_id>_report_20260309_1549.md
+output/workspace_1234567_20260309_1549.xlsx
 ```
+
+### Multi-Workspace
+Organized by workspace name:
+```
+output/
+├── prod/
+│   ├── workspace_3456789_20260309_1549.xlsx
+│   └── .inventory_cache/
+├── staging/
+│   └── workspace_2345678_20260309_1550.xlsx
+└── dev/
+    └── workspace_1234567_20260309_1551.xlsx
+```
+
+**Default format:** XLSX (Excel) — configurable per workspace or globally
 
 ---
 
@@ -183,8 +236,10 @@ pytest -q
 | Feature | Status |
 |---------|--------|
 | 40+ API endpoints | ✅ Complete |
-| Authentication (SP, Token, Basic) | ✅ Complete |
-| Output (Markdown, Excel) | ✅ Complete |
+| Multi-workspace support | ✅ Complete |
+| Interactive setup wizard | ✅ Complete |
+| Authentication (PAT, Service Principal) | ✅ Complete |
+| Output (Excel, Markdown, JSON) | ✅ Complete |
 | Cloud provider detection | ✅ Complete |
 | Workspace ID auto-detect | ✅ Complete |
 | Batching & timeouts | ✅ Complete |

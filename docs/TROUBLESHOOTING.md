@@ -1,15 +1,61 @@
 # Troubleshooting Guide
 
+## Multi-Workspace Issues
+
+### Error: "No workspaces configured"
+**Solution:** Run the setup wizard:
+```bash
+make setup
+# or: python -m lakeventory setup
+```
+
+### Error: "Workspace 'xyz' not found in configuration"
+**Solution:** List available workspaces:
+```bash
+make list-workspaces
+# or: python -m lakeventory --list-workspaces
+```
+
+Then use one of the listed workspace names:
+```bash
+make inventory-workspace WORKSPACE=prod
+```
+
+### Different permissions across workspaces
+**Cause:** Each workspace may have different RBAC settings  
+**Solution:** Validate permissions per workspace:
+```bash
+python -m lakeventory --workspace prod --validate-permissions
+python -m lakeventory --workspace staging --validate-permissions
+```
+
+### Custom output directories not working
+**Check:** Verify workspace configuration in `.lakeventory/config.yaml`:
+```yaml
+workspaces:
+  prod:
+    output_dir: /custom/path  # Must be absolute or relative path
+```
+
+**See [MULTI_WORKSPACE.md](MULTI_WORKSPACE.md)** for complete configuration guide.
+
+---
+
 ## Authentication Issues
 
 ### Error: "Missing DATABRICKS_HOST"
-**Solution:** Set `DATABRICKS_HOST` in `.env` or environment variable
+**Solution (Single Workspace):** Set `DATABRICKS_HOST` in `.env` or environment variable
 ```bash
 export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 ```
 
+**Solution (Multi-Workspace):** Configure workspaces via setup wizard:
+```bash
+make setup
+```
+
 ### Error: "Missing Databricks credentials"
-**Solution:** Configure one of these authentication methods:
+**Solution (Single Workspace):** Configure one of these authentication methods:
 ```env
 # Option 1: Service Principal (recommended)
 DATABRICKS_CLIENT_ID=...
@@ -17,11 +63,14 @@ DATABRICKS_CLIENT_SECRET=...
 
 # Option 2: PAT Token
 DATABRICKS_TOKEN=...
-
-# Option 3: Username + Password
-DATABRICKS_USERNAME=...
-DATABRICKS_PASSWORD=...
 ```
+
+**Solution (Multi-Workspace):** Use setup wizard:
+```bash
+make setup
+```
+
+**See [AUTHENTICATION.md](AUTHENTICATION.md)** for detailed authentication guide.
 
 ### Error: "Authentication failed (401)"
 **Solution:** Verify credentials are correct and not expired. For PAT tokens, check expiration date.
@@ -123,6 +172,30 @@ Valid values: `AWS`, `AZURE`, `GCP`
 
 ## Output Issues
 
+### Files are in Markdown instead of Excel
+**Cause:** Output format might be misconfigured  
+**Solution:** Check your configuration:
+```yaml
+# .lakeventory/config.yaml
+global_config:
+  output_format: xlsx  # Should be xlsx for Excel (default)
+```
+
+Or specify format explicitly:
+```bash
+python -m lakeventory --out-xlsx report.xlsx
+```
+
+### Want to change default output format
+**Solution:** Edit `.lakeventory/config.yaml`:
+```yaml
+global_config:
+  output_format: xlsx      # Default: Excel
+  # output_format: markdown  # Alternative: Markdown
+  # output_format: json      # Alternative: JSON
+  # output_format: all       # All formats
+```
+
 ### Error: "Output directory not found"
 **Solution:** Ensure directory exists or is accessible:
 ```bash
@@ -192,6 +265,13 @@ python -m lakeventory \
 
 1. Check the `Warnings` sheet in Excel output for API errors
 2. Run `make check` to verify environment setup
+3. Review documentation:
+   - [MULTI_WORKSPACE.md](MULTI_WORKSPACE.md) - Multi-workspace configuration
+   - [AUTHENTICATION.md](AUTHENTICATION.md) - Authentication methods
+   - [PERMISSIONS.md](PERMISSIONS.md) - Required permissions
+   - [USAGE.md](USAGE.md) - Command reference
+4. Enable debug logging: `--log-level debug`
+5. Check GitHub issues: https://github.com/felipemoz/lakeventory/issues
 3. Run `python -m lakeventory --validate-permissions` to check access
 4. Enable debug logging: `--log-level debug`
 5. Open an issue with debug output and error message

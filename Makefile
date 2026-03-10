@@ -3,7 +3,9 @@
 	inventory-debug inventory-error inventory-verbose \
 	inventory-selective inventory-full inventory-incremental \
 	inventory-validate \
-	cache-clear cache-info
+	cache-clear cache-info \
+	setup list-workspaces \
+	inventory-all inventory-workspace
 
 PYTHON ?= python3
 OUT ?= report.md
@@ -21,22 +23,37 @@ LOG_LEVEL ?= info
 help:
 	@echo "Available targets:"
 	@echo "  make check                  # health check (dependencies, auth, workspace)"
+		@echo ""
+		@echo "Setup & Configuration:"
+		@echo "  make setup                  # interactive multi-workspace setup wizard"
+		@echo "  make list-workspaces        # list configured workspaces"
+		@echo ""
+		@echo "Inventory Commands:"
 	@echo "  make inventory              # default run (respects BATCH_SIZE/BATCH_SLEEP_MS/SERVERLESS)"
+		@echo "  make inventory-workspace    # run on specific workspace (WORKSPACE=name)"
+		@echo "  make inventory-all          # run on all configured workspaces"
 	@echo "  make inventory-basic        # basic run with default options"
 	@echo "  make inventory-batch        # run with explicit batching"
 	@echo "  make inventory-serverless   # run serverless mode"
 	@echo "  make inventory-incremental  # delta mode using cache snapshots"
 	@echo "  make inventory-no-progress  # run with progress bars disabled"
 	@echo "  make inventory-validate     # validate permissions only (fail on errors)"
+		@echo ""
+		@echo "Debugging & Logging:"
 	@echo "  make inventory-debug        # run with debug logs"
 	@echo "  make inventory-error        # show only errors"
 	@echo "  make inventory-verbose      # info/verbose logs"
+		@echo ""
+		@echo "Collectors:"
 	@echo "  make inventory-selective    # selected collectors only"
 	@echo "  make inventory-full         # heavy collectors enabled"
+		@echo ""
+		@echo "Cache Management:"
 	@echo "  make cache-info             # show cache snapshot info"
 	@echo "  make cache-clear            # clear cache snapshots"
 	@echo ""
 	@echo "Parameters (optional):"
+		@echo "  WORKSPACE=name              # workspace name (for inventory-workspace)"
 	@echo "  OUTPUT_DIR=path             # output directory (default: ./output or from .env)"
 	@echo "  OUT=file.md                 # output markdown file (default: report.md)"
 	@echo "  OUT_XLSX=file.xlsx          # output Excel file"
@@ -47,6 +64,9 @@ help:
 	@echo "  SERVERLESS=1                # enable serverless mode"
 	@echo ""
 	@echo "Examples:"
+		@echo "  make setup                                      # configure workspaces"
+		@echo "  make inventory-workspace WORKSPACE=dev          # run on dev workspace"
+		@echo "  make inventory-all                              # run on all workspaces"
 	@echo "  make inventory OUTPUT_DIR=./reports"
 	@echo "  make inventory-full OUTPUT_DIR=/tmp/reports BATCH_SIZE=100"
 	@echo "  make inventory-selective OUTPUT_DIR=./data COLLECTORS=workspace,jobs"
@@ -171,3 +191,35 @@ cache-info:
 cache-clear:
 	@echo "Clearing inventory cache..."
 	$(PYTHON) -c "from lakeventory.cache import InventoryCache; from pathlib import Path; c = InventoryCache(); deleted = c.clear_cache(); print(f'Deleted {deleted} snapshot files')"
+# Multi-workspace targets
+setup:
+	@echo "Running interactive setup wizard..."
+	$(PYTHON) -m lakeventory setup
+
+list-workspaces:
+	@echo "Configured workspaces:"
+	$(PYTHON) -m lakeventory --list-workspaces
+
+inventory-all:
+	@echo "Running inventory on all configured workspaces..."
+	$(PYTHON) -m lakeventory --all-workspaces \
+		--out $(OUT) \
+		--log-level $(LOG_LEVEL) \
+		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
+		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) \
+		--batch-size $(BATCH_SIZE) \
+		--batch-sleep-ms $(BATCH_SLEEP_MS) \
+		$(if $(filter 1,$(SERVERLESS)),--serverless,)
+
+inventory-workspace:
+	@if [ -z "$(WORKSPACE)" ]; then echo "Error: WORKSPACE variable required. Usage: make inventory-workspace WORKSPACE=dev"; exit 1; fi
+	@echo "Running inventory on workspace: $(WORKSPACE)"
+	$(PYTHON) -m lakeventory --workspace $(WORKSPACE) \
+		--out $(OUT) \
+		--log-level $(LOG_LEVEL) \
+		$(if $(OUTPUT_DIR),--out-dir $(OUTPUT_DIR),) \
+		$(if $(OUT_XLSX),--out-xlsx $(OUT_XLSX),) \
+		--batch-size $(BATCH_SIZE) \
+		--batch-sleep-ms $(BATCH_SLEEP_MS) \
+		$(if $(filter 1,$(SERVERLESS)),--serverless,)
+
