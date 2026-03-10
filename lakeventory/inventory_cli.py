@@ -1,6 +1,7 @@
 """Command-line interface for Lakeventory."""
 
 import argparse
+import copy
 import logging
 import os
 import re
@@ -24,6 +25,15 @@ from lakeventory.workspace_config import ConfigManager, WorkspaceConfig
 
 
 logger = logging.getLogger(__name__)
+
+
+def _workspace_signature(workspace: WorkspaceConfig) -> tuple:
+    """Build a signature to detect duplicated workspace configs."""
+    host = (workspace.host or "").strip().lower().rstrip("/")
+    auth_method = (workspace.auth_method or "").strip().lower()
+    token = (workspace.token or "").strip()
+    client_id = (workspace.client_id or "").strip()
+    return (host, auth_method, token, client_id)
 
 
 def _extract_workspace_id(host: str) -> str:
@@ -187,13 +197,38 @@ def main() -> int:
             return 1
         
         logger.info("Running inventory on all %d workspaces", len(config.workspaces))
+
+        seen_signatures = set()
         
-        for workspace_name in config.workspaces.keys():
+        workspace_names = list(config.workspaces.keys())
+        # For inventory-all, keep business/workload names first and process the
+        # alias workspace "default" last. This ensures deduplication keeps names
+        # like "prod" and skips "default" when both point to the same target.
+        if "default" in workspace_names:
+            workspace_names = [name for name in workspace_names if name != "default"] + ["default"]
+
+        for workspace_name in workspace_names:
+            workspace = config.get_workspace(workspace_name)
+            if not workspace:
+                logger.error("Workspace '%s' not found in configuration", workspace_name)
+                continue
+
+            signature = _workspace_signature(workspace)
+            if signature in seen_signatures:
+                logger.info(
+                    "Skipping redundant workspace '%s' (same host/auth as a previous workspace)",
+                    workspace_name,
+                )
+                continue
+            seen_signatures.add(signature)
+
             logger.info("\n" + "=" * 60)
             logger.info("Processing workspace: %s", workspace_name)
             logger.info("=" * 60)
-            
-            result = _run_single_workspace(args, config, workspace_name)
+
+            workspace_args = copy.copy(args)
+            workspace_args.out_dir = args.out_dir
+            result = _run_single_workspace(workspace_args, config, workspace_name)
             if result != 0:
                 logger.error("Failed to process workspace: %s", workspace_name)
         
@@ -223,13 +258,12 @@ def _run_single_workspace(args, config, workspace_name: str = None) -> int:
         config_manager = ConfigManager()
         config_manager.apply_workspace_env(workspace)
         
-        # Override output directory with workspace-specific subdirectory
-        # Use workspace-specific output_dir if configured, otherwise use global
-        base_output_dir = workspace.output_dir or config.global_config.output_dir
+        # In multi-workspace mode, always organize outputs by workspace directory.
+        # Base directory priority: CLI --out-dir > workspace.output_dir > global output_dir.
+        base_output_dir = args.out_dir or workspace.output_dir or config.global_config.output_dir
         workspace_output_dir = Path(base_output_dir) / workspace_name
         workspace_output_dir.mkdir(parents=True, exist_ok=True)
-        if not args.out_dir:
-            args.out_dir = str(workspace_output_dir)
+        args.out_dir = str(workspace_output_dir)
 
     root = Path(args.root).resolve()
     
