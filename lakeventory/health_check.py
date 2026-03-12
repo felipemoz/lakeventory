@@ -108,11 +108,11 @@ def _build_client(workspace: WorkspaceConfig) -> WorkspaceClient:
 
     if workspace.auth_method == "pat":
         if not workspace.token:
-            raise RuntimeError("PAT incompleto no config.yaml: faltando token")
+            raise RuntimeError("Incomplete PAT in config.yaml: missing token")
         return WorkspaceClient(host=workspace.host, token=workspace.token)
 
     raise RuntimeError(
-        f"Método de autenticação não suportado no config.yaml: {workspace.auth_method}"
+        f"Authentication method not supported in config.yaml: {workspace.auth_method}"
     )
 
 
@@ -170,10 +170,10 @@ def run_health_check(workspace_name: Optional[str] = None) -> bool:
     workspace, config_path = _load_workspace(workspace_name)
     if not workspace:
         if workspace_name:
-            print(f"  ❌ Workspace '{workspace_name}' não encontrado em: {config_path}")
+            print(f"  ❌ Workspace '{workspace_name}' not found in: {config_path}")
             print("  ℹ️  Run: make list-workspaces")
         else:
-            print(f"  ❌ Nenhum workspace configurado em: {config_path}")
+            print(f"  ❌ No workspace configured in: {config_path}")
             print("  ℹ️  Run: make setup")
         return False
 

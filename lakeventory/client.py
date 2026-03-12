@@ -44,8 +44,8 @@ def build_workspace_client(root: Path, http_timeout_seconds: Optional[int] = Non
     workspace = config.get_workspace(config.default_workspace)
     if not workspace:
         raise RuntimeError(
-            "Nenhum workspace configurado no config.yaml.\n"
-            "Configure via 'make setup' ou defina default_workspace."
+            "No workspace configured in config.yaml.\n"
+            "Configure via 'make setup' or set default_workspace."
         )
 
     return build_workspace_client_with_config(
@@ -71,8 +71,8 @@ def build_workspace_client_with_config(
     resolved_host = (host or "").strip()
     if not resolved_host:
         raise RuntimeError(
-            "DATABRICKS_HOST não configurado.\n"
-            "Configure via 'make setup' ou crie .lakeventory/config.yaml"
+            "DATABRICKS_HOST not configured.\n"
+            "Configure via 'make setup' or create .lakeventory/config.yaml"
         )
 
     resolved_client_id = (client_id or "").strip()
@@ -88,7 +88,7 @@ def build_workspace_client_with_config(
         return WorkspaceClient(**kwargs)
 
     if resolved_client_id and resolved_client_secret:
-        logger.debug("Autenticando com Service Principal (client_id: %s...)", resolved_client_id[:8])
+        logger.debug("Authenticating with Service Principal (client_id: %s...)", resolved_client_id[:8])
         return _create_client(
             host=resolved_host,
             client_id=resolved_client_id,
@@ -96,12 +96,12 @@ def build_workspace_client_with_config(
         )
 
     if resolved_token:
-        logger.debug("Autenticando com PAT Token")
+        logger.debug("Authenticating with PAT Token")
         return _create_client(host=resolved_host, token=resolved_token)
 
     raise RuntimeError(
-        "Credenciais Databricks não configuradas. Use 'make setup' para configurar.\n"
-        "Métodos suportados via .lakeventory/config.yaml:\n"
+        "Databricks credentials not configured. Use 'make setup' to configure.\n"
+        "Supported methods via .lakeventory/config.yaml:\n"
         "  1. Service Principal: client_id + client_secret\n"
         "  2. PAT Token: token"
     )

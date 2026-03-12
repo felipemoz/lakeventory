@@ -350,7 +350,7 @@ class TestConfigManager:
         assert loaded.workspaces["test"].token == "test-token"
     
     def test_load_ignores_env_without_config(self, tmp_path: Path, monkeypatch):
-        """Sem config.yaml, não migra automaticamente de .env."""
+        """Without config.yaml, does not automatically migrate from .env."""
         monkeypatch.chdir(tmp_path)
 
         env_path = tmp_path / ".env"

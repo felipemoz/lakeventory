@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_env_file(env_file: Path) -> Dict[str, str]:
-    """Lê variáveis de um arquivo .env específico (legado multi-workspace)."""
+    """Parse environment variables from a specific .env file (legacy multi-workspace support)."""
     env: Dict[str, str] = {}
     if not env_file.exists():
         return env

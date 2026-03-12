@@ -44,12 +44,12 @@ workspaces:
 ## Authentication Issues
 
 ### Error: "Missing DATABRICKS_HOST"
-**Solution:** Configure o workspace em `.lakeventory/config.yaml`:
+**Solution:** Configure the workspace in `.lakeventory/config.yaml`:
 ```bash
 make setup
 ```
 
-Ou defina temporariamente via env var para debug:
+Or set temporarily via environment variable for debugging:
 ```bash
 export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 ```

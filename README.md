@@ -76,11 +76,15 @@ make help
 
 | Topic | Link |
 |-------|------|
+| **Features Overview** | [docs/FEATURES.md](docs/FEATURES.md) |
 | **Getting Started** | [Quick Start Guide](#quick-start) |
 | **CLI Commands** | [docs/CLI.md](docs/CLI.md) |
 | **Authentication** | [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) |
+| **Multi-Workspace** | [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md) |
 | **Permissions** | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
 | **Workspace Backup** | [docs/BACKUP.md](docs/BACKUP.md) |
+| **Incremental/Cache** | [docs/IMPLEMENTATION_CACHE.md](docs/IMPLEMENTATION_CACHE.md) |
+| **Docker Deployment** | [docs/DOCKER.md](docs/DOCKER.md) |
 | **Usage Examples** | [docs/USAGE.md](docs/USAGE.md) |
 | **Troubleshooting** | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 
