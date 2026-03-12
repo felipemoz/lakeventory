@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
@@ -45,7 +44,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--log-level",
-        default=os.getenv("INVENTORY_LOG_LEVEL", "info"),
+        default="info",
         choices=["error", "info", "verbose", "debug"],
         help="Logging verbosity level (default: info)",
     )

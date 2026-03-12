@@ -110,7 +110,7 @@ First public alpha for Lakeventory with scheduled runs and updated branding.
 **Added**
 - Docker Compose scheduled runner (full-first, then incremental)
 - Dockerfile + runner script (`scripts/run_scheduled.sh`)
-- Compose com volume para `.lakeventory/config.yaml`
+- Compose with mounted `.lakeventory/config.yaml`
 - Named volumes for output and cache persistence
 - Release notes template in `docs/RELEASE.md`
 - Contributors guide (`CONTRIBUTORS.md`) and MIT `LICENSE`
@@ -120,7 +120,7 @@ First public alpha for Lakeventory with scheduled runs and updated branding.
 **Changed**
 - Report title now uses Lakeventory branding
 - Package imports and CLI commands updated to `lakeventory`
-- Docker Compose agora usa `.lakeventory/config.yaml` como fonte principal de credenciais
+- Docker Compose now uses `.lakeventory/config.yaml` as the primary credential source
 - Docs reorganized into focused guides (auth, permissions, usage, troubleshooting)
 
 **Fixed**

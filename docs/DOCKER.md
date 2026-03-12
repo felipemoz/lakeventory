@@ -148,7 +148,7 @@ services:
   lakeventory:
     image: lakeventory:alpine  # or :distroless, :static
     volumes:
-      - ./.lakeventory:/app/.lakeventory:ro  # credenciais e config
+      - ./.lakeventory:/app/.lakeventory:ro  # credentials and config
       - lakeventory_output:/app/output
       - lakeventory_cache:/app/.cache
 ```

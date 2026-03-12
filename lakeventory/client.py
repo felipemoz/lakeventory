@@ -1,7 +1,6 @@
 """Databricks workspace client management."""
 
 import logging
-import os
 import warnings as py_warnings
 from pathlib import Path
 from typing import Optional
@@ -10,7 +9,7 @@ from typing import Optional
 py_warnings.filterwarnings('ignore', message='urllib3 v2 only supports OpenSSL 1.1.1+')
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.config import Config as DatabricksConfig
+from lakeventory.workspace_config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +40,71 @@ def build_workspace_client(root: Path, http_timeout_seconds: Optional[int] = Non
     Raises:
         RuntimeError: If DATABRICKS_HOST or credentials are missing.
     """
-    host = os.getenv("DATABRICKS_HOST", "").strip()
-    if not host:
+    config = ConfigManager().load()
+    workspace = config.get_workspace(config.default_workspace)
+    if not workspace:
         raise RuntimeError(
-            "DATABRICKS_HOST não configurado.\n"
-            "Configure via 'make setup' ou crie .lakeventory/config.yaml"
+            "No workspace configured in config.yaml.\n"
+            "Configure via 'make setup' or set default_workspace."
         )
 
-    client_id = os.getenv("DATABRICKS_CLIENT_ID", "").strip()
-    client_secret = os.getenv("DATABRICKS_CLIENT_SECRET", "").strip()
-    token = os.getenv("DATABRICKS_TOKEN", "").strip()
+    return build_workspace_client_with_config(
+        root,
+        host=workspace.host,
+        token=workspace.token,
+        client_id=workspace.client_id,
+        client_secret=workspace.client_secret,
+        timeout_seconds=getattr(config.global_config, "timeout", None),
+    )
 
+
+def build_workspace_client_with_config(
+    root: Path,
+    *,
+    host: Optional[str] = None,
+    token: Optional[str] = None,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    timeout_seconds: Optional[int] = None,
+) -> WorkspaceClient:
+    """Build WorkspaceClient from explicit config values (YAML-first)."""
+    resolved_host = (host or "").strip()
+    if not resolved_host:
+        raise RuntimeError(
+            "DATABRICKS_HOST not configured.\n"
+            "Configure via 'make setup' or create .lakeventory/config.yaml"
+        )
+
+    resolved_client_id = (client_id or "").strip()
+    resolved_client_secret = (client_secret or "").strip()
+    resolved_token = (token or "").strip()
+
+    def _create_client(**kwargs):
+        if timeout_seconds and timeout_seconds > 0:
+            try:
+                return WorkspaceClient(http_timeout_seconds=timeout_seconds, **kwargs)
+            except TypeError:
+                logger.debug("WorkspaceClient does not accept http_timeout_seconds; using SDK default timeout")
+        return WorkspaceClient(**kwargs)
+
+    if resolved_client_id and resolved_client_secret:
+        logger.debug("Authenticating with Service Principal (client_id: %s...)", resolved_client_id[:8])
+        return _create_client(
+            host=resolved_host,
+            client_id=resolved_client_id,
+            client_secret=resolved_client_secret,
+        )
+
+    if resolved_token:
+        logger.debug("Authenticating with PAT Token")
+        return _create_client(host=resolved_host, token=resolved_token)
+
+    raise RuntimeError(
+        "Databricks credentials not configured. Use 'make setup' to configure.\n"
+        "Supported methods via .lakeventory/config.yaml:\n"
+        "  1. Service Principal: client_id + client_secret\n"
+        "  2. PAT Token: token"
+    )
     if client_id and client_secret:
         logger.debug("Autenticando com Service Principal (client_id: %s...)", client_id[:8])
         config = DatabricksConfig(

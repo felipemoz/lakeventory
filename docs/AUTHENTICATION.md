@@ -48,7 +48,7 @@ global_config:
 
 ## Single Workspace Authentication
 
-Configure via `make setup` (wizard interativo) ou edite `.lakeventory/config.yaml` diretamente.
+Configure via `make setup` (interactive setup wizard) or edit `.lakeventory/config.yaml` directly.
 
 ## 1️⃣ Service Principal (Recommended for Production/CI-CD)
 
@@ -65,7 +65,7 @@ Best for automation, CI/CD pipelines, and scheduled jobs.
 
 ```yaml
 workspaces:
-  meu-workspace:
+  production:
     host: https://<workspace-host>
     auth_method: service_principal
     client_id: <service-principal-id>
@@ -133,7 +133,7 @@ Personal Access Token from your Databricks account.
 
 ```yaml
 workspaces:
-  meu-workspace:
+  development:
     host: https://<workspace-host>
     auth_method: pat
     token: <your-pat-token>

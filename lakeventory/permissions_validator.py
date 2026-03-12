@@ -2,15 +2,15 @@
 
 from databricks.sdk import WorkspaceClient
 from typing import Dict, List, Tuple
-import os
 from itertools import islice
 
 
 class PermissionsValidator:
     """Validate that the current user has required permissions for inventory."""
 
-    def __init__(self, client: WorkspaceClient):
+    def __init__(self, client: WorkspaceClient, cloud_provider: str = ""):
         self.client = client
+        self.cloud_provider = (cloud_provider or "").upper()
         self.results = {}
         self.warnings = []
 
@@ -21,12 +21,10 @@ class PermissionsValidator:
         Returns:
             (all_passed: bool, results: dict of {api_name: bool}, warnings: list of str)
         """
-        cloud_provider = os.getenv("DATABRICKS_CLOUD_PROVIDER", "").upper()
-        
         # Core APIs (always checked)
         self._check_workspace_api()
         self._check_jobs_api()
-        self._check_clusters_api(cloud_provider)
+        self._check_clusters_api()
         self._check_sql_api()
         self._check_mlflow_api()
         self._check_unity_catalog_api()
@@ -61,7 +59,7 @@ class PermissionsValidator:
             self.results["jobs"] = False
             self.warnings.append(f"jobs.list: {str(e)}")
 
-    def _check_clusters_api(self, cloud_provider: str):
+    def _check_clusters_api(self):
         """Check clusters.list permission."""
         try:
             list(islice(self.client.clusters.list(), 1))

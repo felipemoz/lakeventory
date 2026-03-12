@@ -7,15 +7,13 @@ Automated discovery and inventory of Databricks workspace assets and dependencie
 
 ## Installation
 
-Método oficial (único documentado):
-
-Instalação rápida (curl + bash):
+Official installation (curl + bash):
 
 ```bash
 curl -fsSL https://github.com/felipemoz/lakeventory/raw/main/scripts/install.sh | bash
 ```
 
-Ou manualmente:
+Manual alternative:
 
 ```bash
 git clone https://github.com/felipemoz/lakeventory.git
@@ -28,19 +26,19 @@ make install
 ## Quick Start
 
 ```bash
-make setup            # Cria/atualiza .lakeventory/config.yaml
-make check            # Valida configuração e conexão
-make inventory        # Executa inventário no workspace default
-make inventory-all    # Executa em todos os workspaces do config.yaml
+make setup            # Creates/updates .lakeventory/config.yaml
+make check            # Validates config and workspace connectivity
+make inventory        # Runs inventory on default workspace
+make inventory-all    # Runs inventory on all configured workspaces
 ```
 
 ---
 
 ## Execution Model
 
-O README documenta apenas execução via `make` para manter um fluxo único de operação.
+This README documents only the Makefile-based workflow to keep one operational path.
 
-Comandos operacionais:
+Core commands:
 
 ```bash
 make setup
@@ -51,22 +49,26 @@ make inventory-all
 make inventory-backup
 ```
 
-Referência completa dos alvos: `make help`.
+For all available targets, run:
+
+```bash
+make help
+```
 
 ---
 
 ## What It Collects
 
-- **Workspace**: Notebooks, files, directories
-- **Compute**: Jobs, clusters, instance pools, policies, init scripts
-- **SQL**: Warehouses, dashboards, queries, alerts, pipelines  
-- **ML**: Experiments, registered models, model versions
-- **Data**: Unity Catalog (catalogs, schemas, tables, volumes), External locations
-- **Security**: Secret scopes, tokens, IP access lists, identities
+- **Workspace**: notebooks, files, directories
+- **Compute**: jobs, clusters, instance pools, policies, init scripts
+- **SQL**: warehouses, dashboards, queries, alerts, pipelines
+- **ML**: experiments, registered models, model versions
+- **Data**: Unity Catalog (catalogs, schemas, tables, volumes), external locations
+- **Security**: secret scopes, tokens, IP access lists, identities
 - **Repos**: Git repositories and credentials
 - **Sharing**: Delta Sharing assets (shares, recipients, providers)
-- **Serving**: Serving endpoints, vector search, online tables
-- **DBFS**: Root directory listing (optional)
+- **Serving**: serving endpoints, vector search, online tables
+- **DBFS**: root directory listing (optional)
 
 ---
 
@@ -74,11 +76,15 @@ Referência completa dos alvos: `make help`.
 
 | Topic | Link |
 |-------|------|
+| **Features Overview** | [docs/FEATURES.md](docs/FEATURES.md) |
 | **Getting Started** | [Quick Start Guide](#quick-start) |
 | **CLI Commands** | [docs/CLI.md](docs/CLI.md) |
 | **Authentication** | [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) |
+| **Multi-Workspace** | [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md) |
 | **Permissions** | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) |
 | **Workspace Backup** | [docs/BACKUP.md](docs/BACKUP.md) |
+| **Incremental/Cache** | [docs/IMPLEMENTATION_CACHE.md](docs/IMPLEMENTATION_CACHE.md) |
+| **Docker Deployment** | [docs/DOCKER.md](docs/DOCKER.md) |
 | **Usage Examples** | [docs/USAGE.md](docs/USAGE.md) |
 | **Troubleshooting** | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 
@@ -86,7 +92,7 @@ Referência completa dos alvos: `make help`.
 
 ## CI/CD Status
 
-The badges above reflect the current pipeline status:
+The badges above reflect current pipeline status:
 - Docker image build and publish (alpine, distroless, static)
 - Python package build and publish (PyPI)
 
@@ -105,21 +111,21 @@ make install
 
 ## Configuration
 
-Use o setup wizard para configurar workspaces:
+Use the setup wizard to configure workspaces:
 
 ```bash
 make setup
 ```
 
 Configuration is stored in `.lakeventory/config.yaml` with support for:
-- Multiple workspaces (dev, staging, prod)
-- PAT tokens or Service Principal authentication
+- Multiple workspaces (`dev`, `staging`, `prod`)
+- PAT token or Service Principal authentication
 - Workspace-specific output directories
-- Global settings (format: xlsx, batch size, collectors)
+- Global settings (`output_format`, `batch_size`, collectors, backup flags)
 
-**See [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md)** for complete guide.
-
-**See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)** for auth methods (PAT, Service Principal).
+See:
+- [docs/MULTI_WORKSPACE.md](docs/MULTI_WORKSPACE.md)
+- [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)
 
 ---
 
@@ -130,29 +136,32 @@ make check
 ```
 
 This validates:
-- ✅ Python version (3.8+)
-- ✅ Dependencies installed
-- ✅ Credentials configured
-- ✅ Workspace connection
+- Python version (3.8+)
+- Installed dependencies
+- Configured credentials
+- Workspace connectivity
 
 ---
 
 ## Common Commands
 
-### Setup e validação
+### Setup and validation
+
 ```bash
 make setup
 make check
 ```
 
-### Execução
+### Execution
+
 ```bash
 make inventory
 make inventory-workspace WORKSPACE=prod
 make inventory-all
 ```
 
-### Modos e variações
+### Modes and variants
+
 ```bash
 make inventory-validate
 make inventory-selective COLLECTORS=workspace,jobs
@@ -162,7 +171,7 @@ make inventory-backup
 make inventory-all-backup
 ```
 
-**See [docs/USAGE.md](docs/USAGE.md)** for complete Makefile reference.
+For complete Make target usage, see [docs/USAGE.md](docs/USAGE.md).
 
 ---
 
@@ -172,18 +181,21 @@ Reports include:
 - Summary counts by asset type
 - Full listing of workspace assets
 - Warnings for API errors or permission issues
-- Excel sheets (default) for easy browsing and filtering
+- Excel sheets (default) for easier filtering and navigation
 
-### Single Workspace
+### Single workspace
+
 Files are timestamped automatically and include workspace ID.
-The base directory comes from `output_dir` in `.lakeventory/config.yaml`
-(default: `./output` if not overridden):
+Base directory comes from `output_dir` in `.lakeventory/config.yaml` (default `./output`):
+
 ```
 <output_dir>/workspace_1234567_20260309_1549.xlsx
 ```
 
-### Multi-Workspace
+### Multi-workspace
+
 Organized by workspace name, using `global_config.output_dir` or workspace-specific `output_dir`:
+
 ```
 <output_dir>/
 ├── prod/
@@ -195,19 +207,18 @@ Organized by workspace name, using `global_config.output_dir` or workspace-speci
     └── workspace_1234567_20260309_1551.xlsx
 ```
 
-**Default format:** XLSX (Excel) — configurable per workspace or globally
-**Output directory:** configurable via YAML `output_dir` (global and/or per-workspace)
+Default format: `xlsx` (configurable globally or per workspace).
 
 ---
 
 ## Troubleshooting
 
-**See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** for:
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for:
 - Authentication errors
 - Permission issues
 - Timeout handling
 - Performance optimization
-- Cloud-specific problems
+- Cloud-specific limitations
 
 ---
 
@@ -216,9 +227,9 @@ Organized by workspace name, using `global_config.output_dir` or workspace-speci
 ```
 lakeventory/
 ├── __main__.py          # CLI entry point
-├── inventory_cli.py     # Command-line interface
-├── client.py            # Authentication
-├── collectors.py        # 18+ asset collectors
+├── inventory_cli.py     # Main command-line workflow
+├── client.py            # Databricks client/auth setup
+├── collectors.py        # Asset collectors
 ├── output.py            # Markdown/Excel export
 ├── models.py            # Data structures
 ├── utils.py             # Utilities
@@ -227,6 +238,14 @@ lakeventory/
 ```
 
 ---
+
+## Documentation Language Standard
+
+English is the standard language for this repository documentation.
+All Markdown files should be written and maintained in English.
+
+---
+
 
 ## Testing
 
@@ -257,4 +276,4 @@ make test
 
 ## License
 
-See LICENSE file for details.
+See LICENSE for details.

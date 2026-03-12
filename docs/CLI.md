@@ -140,7 +140,7 @@ export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 export DATABRICKS_TOKEN=dapi...
 ```
 
-> **Recomendado:** configure credenciais em `.lakeventory/config.yaml` com `make setup`.
+> **Recommended:** configure credentials in `.lakeventory/config.yaml` with `make setup`.
 
 ---
 

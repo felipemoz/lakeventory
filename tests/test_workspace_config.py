@@ -205,6 +205,39 @@ class TestLakeventoryConfig:
         assert "test" in loaded_config.workspaces
         assert loaded_config.workspaces["test"].host == "https://test.databricks.com"
         assert loaded_config.workspaces["test"].token == "test-token"
+
+    def test_yaml_serialization_includes_optional_workspace_keys(self, tmp_path: Path):
+        """Optional workspace keys should be explicitly present in YAML output."""
+        ws = WorkspaceConfig(
+            name="test",
+            host="https://test.databricks.com",
+            auth_method="pat",
+            token="test-token",
+        )
+        config = LakeventoryConfig(default_workspace="test", workspaces={"test": ws})
+
+        config_path = tmp_path / "config.yaml"
+        config.to_yaml(config_path)
+
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        ws_raw = raw["workspaces"]["test"]
+
+        for key in [
+            "host",
+            "auth_method",
+            "description",
+            "output_dir",
+            "token",
+            "client_id",
+            "client_secret",
+            "tenant_id",
+        ]:
+            assert key in ws_raw
+
+        assert ws_raw["output_dir"] == ""
+        assert ws_raw["client_id"] == ""
+        assert ws_raw["client_secret"] == ""
+        assert ws_raw["tenant_id"] == ""
     
     def test_get_workspace(self):
         """Test getting workspace by name."""
@@ -317,7 +350,7 @@ class TestConfigManager:
         assert loaded.workspaces["test"].token == "test-token"
     
     def test_load_ignores_env_without_config(self, tmp_path: Path, monkeypatch):
-        """Sem config.yaml, não migra automaticamente de .env."""
+        """Without config.yaml, does not automatically migrate from .env."""
         monkeypatch.chdir(tmp_path)
 
         env_path = tmp_path / ".env"

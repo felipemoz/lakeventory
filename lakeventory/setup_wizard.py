@@ -2,7 +2,6 @@
 
 import concurrent.futures
 import getpass
-import os
 import re
 import sys
 from pathlib import Path
@@ -36,13 +35,8 @@ def print_section(text: str) -> None:
     print('─' * len(text))
 
 
-def read_secret(prompt: str, env_key: str) -> str:
-    """Read secret from env or prompt, with visible fallback."""
-    env_value = os.getenv(env_key, "").strip()
-    if env_value:
-        use_env = input(f"{prompt} (press Enter to use ${env_key}): ").strip()
-        if use_env == "":
-            return env_value
+def read_secret(prompt: str, _unused_env_key: str = "") -> str:
+    """Read secret from prompt, with visible fallback."""
     try:
         value = getpass.getpass(f"{prompt}: ").strip()
     except (EOFError, KeyboardInterrupt, Exception):
@@ -206,7 +200,7 @@ def add_workspace_wizard(config: LakeventoryConfig) -> Optional[WorkspaceConfig]
     if choice == '1':
         auth_method = 'pat'
         print_section("🔑 Personal Access Token (PAT)")
-        token = read_secret("Enter PAT token", "DATABRICKS_TOKEN")
+        token = read_secret("Enter PAT token")
         if not token:
             print("  ❌ Token cannot be empty")
             return None
@@ -215,7 +209,7 @@ def add_workspace_wizard(config: LakeventoryConfig) -> Optional[WorkspaceConfig]
         auth_method = 'service_principal'
         print_section("🤖 Service Principal (OAuth)")
         client_id = input("Client ID: ").strip()
-        client_secret = read_secret("Client Secret", "DATABRICKS_CLIENT_SECRET")
+        client_secret = read_secret("Client Secret")
         tenant_id = input("Tenant ID (Azure AD): ").strip()
         
         if not client_id or not client_secret or not tenant_id:
@@ -332,6 +326,116 @@ def remove_workspace_wizard(config: LakeventoryConfig) -> bool:
     return True
 
 
+def edit_workspace_wizard(config: LakeventoryConfig) -> bool:
+    """Interactive wizard to edit an existing workspace."""
+    if not config.workspaces:
+        print("\n❌ No workspaces to edit")
+        return False
+
+    print_header("📝 Edit Workspace")
+    print("\nAvailable workspaces:")
+    for name in config.workspaces.keys():
+        default = " (default)" if name == config.default_workspace else ""
+        print(f"  • {name}{default}")
+
+    name = input("\nWorkspace name to edit: ").strip()
+    if name not in config.workspaces:
+        print(f"  ❌ Workspace '{name}' not found")
+        return False
+
+    current = config.workspaces[name]
+
+    print("\nPress Enter to keep current value.")
+
+    while True:
+        host_input = input(f"Host [{current.host}]: ").strip()
+        host = host_input or current.host
+        if not host.startswith(("http://", "https://")):
+            host = f"https://{host}"
+        if validate_workspace_url(host):
+            break
+        print("  ❌ Invalid URL format")
+
+    description_input = input(f"Description [{current.description}]: ").strip()
+    description = description_input if description_input else current.description
+
+    current_output_dir = current.output_dir or ""
+    output_dir_input = input(f"Output dir [{current_output_dir}]: ").strip()
+    output_dir = output_dir_input if output_dir_input else current.output_dir
+
+    print_section("Authentication")
+    print(f"Current auth method: {current.auth_method}")
+    print("  1. 🔑 Personal Access Token (PAT)")
+    print("  2. 🤖 Service Principal (OAuth)")
+    auth_choice = input("Select [1-2] (Enter to keep current): ").strip()
+
+    if auth_choice == "1":
+        auth_method = "pat"
+    elif auth_choice == "2":
+        auth_method = "service_principal"
+    else:
+        auth_method = current.auth_method
+
+    token = current.token
+    client_id = current.client_id
+    client_secret = current.client_secret
+    tenant_id = current.tenant_id
+
+    if auth_method == "pat":
+        update_token = input("Update PAT token? [y/N]: ").strip().lower()
+        if update_token == "y":
+            token = read_secret("Enter PAT token")
+            if not token:
+                print("  ❌ Token cannot be empty")
+                return False
+        client_id = ""
+        client_secret = ""
+        tenant_id = ""
+    else:
+        print("\n🤖 Service Principal settings")
+        client_id_input = input(f"Client ID [{current.client_id or ''}]: ").strip()
+        client_id = client_id_input if client_id_input else current.client_id
+
+        update_secret = input("Update Client Secret? [y/N]: ").strip().lower()
+        if update_secret == "y":
+            client_secret = read_secret("Client Secret")
+
+        tenant_input = input(f"Tenant ID [{current.tenant_id or ''}]: ").strip()
+        tenant_id = tenant_input if tenant_input else current.tenant_id
+
+        if not client_id or not client_secret or not tenant_id:
+            print("  ❌ client_id, client_secret and tenant_id are required for Service Principal")
+            return False
+        token = ""
+
+    updated = WorkspaceConfig(
+        name=name,
+        host=host,
+        auth_method=auth_method,
+        description=description,
+        output_dir=output_dir,
+        token=token,
+        client_id=client_id,
+        client_secret=client_secret,
+        tenant_id=tenant_id,
+    )
+
+    print("\n⏳ Testing updated connection...")
+    conn_info = test_connection(updated)
+    if conn_info:
+        print(f"  ✅ Connected to workspace ID: {conn_info['workspace_id']}")
+        print(f"  ✅ User: {conn_info['user_name']}")
+    else:
+        keep = input("\nConnection failed. Save changes anyway? [y/N]: ").strip().lower()
+        if keep != "y":
+            print("  Cancelled")
+            return False
+
+    config.workspaces[name] = updated
+    print(f"\n✅ Workspace '{name}' updated successfully!")
+    return True
+
+
 def _build_workspace_client(workspace: WorkspaceConfig) -> WorkspaceClient:
     """Build a WorkspaceClient from WorkspaceConfig fields."""
     if workspace.auth_method == "service_principal":
@@ -402,7 +506,7 @@ def main_menu(config: LakeventoryConfig, config_manager: ConfigManager) -> None:
             add_workspace_wizard(config)
         
         elif choice == '2':
-            print("\n  ℹ️  Edit not yet implemented. Remove and re-add instead.")
+            edit_workspace_wizard(config)
         
         elif choice == '3':
             remove_workspace_wizard(config)
